@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from collections.abc import Callable
 import numpy as np
+import numpy.typing as npt
 from solvent import Solvent
 
 
@@ -13,11 +14,11 @@ class Solution:
     num_ions: int  # unitless
     solubility_limit: float  # kg per kg solvent
     solid_density: float  # kg/m^3
-    density: Callable[[float|np.array],float|np.array]  # kg/m^3
+    density: Callable[[float|npt.NDArray[np.float_]],float|npt.NDArray[np.float_]]  # kg/m^3
       # a fitting function for solvent activity (unitless) in
     # terms of the mass fraction of solute, or None (the
     # default) to assume Raoult's law for ideal mixtures
-    solvent_activity_from_mass_fraction_solute: Callable[[float|np.array], float|np.array]
+    solvent_activity_from_mass_fraction_solute: Callable[[float|npt.NDArray[np.float_]], float|npt.NDArray[np.float_]]
     solid_refractive_index: float
 
     def mole_fraction_solute(self, mass_fraction_solute):

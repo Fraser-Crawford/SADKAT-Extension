@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Self
+from typing_extensions import Self
 
 import numpy as np
 import pandas as pd
@@ -25,16 +25,17 @@ class Droplet(ABC):
     position: np.array
 
     @abstractmethod
-    def state(self) -> npt.NDArray:
+    def state(self) -> npt.NDArray[np.float_]:
         """Returns the state of the droplet."""
         pass
-    @abstractmethod
 
-    def set_state(self,state):
+    @abstractmethod
+    def set_state(self,state:npt.NDArray[np.float_]):
         """Sets the state of the droplet."""
         pass
+
     @abstractmethod
-    def dxdt(self):
+    def dxdt(self)->npt.NDArray[np.float_]:
         """The time derivative of the state of the droplet."""
         pass
 
@@ -296,7 +297,6 @@ class Droplet(ABC):
         Kn = self.knudsen_number
         return 1 + Kn * (A1 + A2 * np.exp(-A3 / Kn))
 
-    @property
     def dvdt(self):
         """Time derivative of velocity, i.e. its acceleration from Newton's second law in m/s^2."""
         rho_p = self.density
@@ -312,7 +312,6 @@ class Droplet(ABC):
 
         return acceleration
 
-    @property
     def drdt(self):
         """Time derivative of droplet position, i.e. its velocity in m/s."""
         return self.velocity
@@ -320,6 +319,10 @@ class Droplet(ABC):
     @abstractmethod
     def virtual_droplet(self, x)->Self:
         """Returns a new droplet from the state x given"""
+        pass
+
+    @abstractmethod
+    def solver(self, dxdt, time_range, first_step, rtol, events):
         pass
 
     def integrate(self, t, rtol=1e-8,
@@ -362,8 +365,8 @@ class Droplet(ABC):
             events += [efflorescing]
 
         dxdt = lambda time, x: self.virtual_droplet(x).dxdt()
-        # noinspection PyTypeChecker
-        trajectory = solve_ivp(dxdt, (0, t), self.state(), first_step=first_step, rtol=rtol, events=events)
+
+        trajectory = self.solver(dxdt,(0,t), first_step, rtol, events)
 
         self.set_state(trajectory.y[:, -1])
         return trajectory

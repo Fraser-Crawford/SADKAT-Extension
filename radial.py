@@ -1,7 +1,9 @@
 import numpy as np
 from attr import dataclass
+from scipy.integrate import solve_ivp
 
 from droplet import Droplet
+from environment import Environment
 from viscous_solution import ViscousSolution
 
 
@@ -9,13 +11,18 @@ from viscous_solution import ViscousSolution
 class RadialDroplet(Droplet):
     """Class for describing a droplet with a non-uniform but radially symmetric composition"""
     solution: ViscousSolution
+    environment: Environment
+    gravity: np.array  # m/s^2
+    temperature: float  # K
+    velocity: np.array
+    position: np.array
     equilibrium_solvent_mass: np.array
-    mass_solvent: float  # kg
+    float_mass_solvent: float  # kg
     log_mass_solute: np.array  # kg
 
     @staticmethod
     def from_mfs(solution, environment, gravity,
-                 radius, mass_fraction_solute, temperature, layers=100,
+                 radius, mass_fraction_solute, temperature, layers=10,
                  velocity=np.zeros(3), position=np.zeros(3)):
         """Create a droplet from experimental conditions.
 
@@ -42,7 +49,7 @@ class RadialDroplet(Droplet):
                              mass_solvent, log_mass_solute)
 
     def set_state(self, state):
-        self.mass_solvent, self.log_mass_solute, self.temperature, self.velocity, self.position = state[0], state[1:self.initial_layers + 1], \
+        self.float_mass_solvent, self.log_mass_solute, self.temperature, self.velocity, self.position = state[0], state[1:self.initial_layers + 1], \
             state[1 + self.initial_layers], state[2 + self.initial_layers:5 + self.initial_layers], state[5 + self.initial_layers:]
 
     @property
@@ -53,7 +60,7 @@ class RadialDroplet(Droplet):
         return np.sum(self.layer_mass_solute)
 
     def mass_solvent(self) -> float:
-        return self.mass_solvent
+        return self.float_mass_solvent
 
     def volume(self) -> float:
         return np.sum(self.layer_volumes)
@@ -65,7 +72,7 @@ class RadialDroplet(Droplet):
     @property
     def outer_layer_solvent_mass(self):
         interior_solvent = np.sum(self.equilibrium_solvent_mass[:self.outer_layer_index])
-        return self.mass_solvent - interior_solvent
+        return self.float_mass_solvent - interior_solvent
 
     @property
     def layer_radii(self):
@@ -92,7 +99,6 @@ class RadialDroplet(Droplet):
             [0 if mass_solute <= 0 else mass_solute_derivative / mass_solute for mass_solute, mass_solute_derivative in
              zip(self.layer_mass_solute, mass_solute_derivatives)])
 
-    @property
     def dCdt(self):
         diffusion = self.diffusion_coefficients
         boundaries = self.layer_radii[:-1]
@@ -111,7 +117,7 @@ class RadialDroplet(Droplet):
         accumulator = 0
         for index, solvent_mass in enumerate(self.equilibrium_solvent_mass):
             accumulator += solvent_mass
-            if self.mass_solvent <= accumulator + solvent_mass * 1e-5:
+            if self.float_mass_solvent <= accumulator + solvent_mass * 1e-5:
                 return index
         return self.initial_layers - 1
 
@@ -152,7 +158,7 @@ class RadialDroplet(Droplet):
         return result
 
     def dxdt(self):
-        return np.hstack((self.dmdt, self.dCdt, self.dTdt, self.dvdt, self.drdt))
+        return np.hstack((self.dmdt(), self.dCdt(), self.dTdt(), self.dvdt(), self.drdt()))
 
     def virtual_droplet(self, x):
         x = (x[0], x[1:1 + self.initial_layers], x[1 + self.initial_layers],
@@ -160,5 +166,8 @@ class RadialDroplet(Droplet):
         return RadialDroplet(self.solution, self.environment, self.gravity, x[2], x[3], x[4],
                              self.equilibrium_solvent_mass, x[0], x[1])
 
+    def solver(self, dxdt, time_range, first_step, rtol, events):
+        return solve_ivp(dxdt, time_range, self.state(), first_step=first_step, rtol=rtol, events=events, method="Radau")
+
     def state(self) -> np.array:
-        return np.hstack((self.mass_solvent, self.log_mass_solute, self.temperature, self.velocity, self.position))
+        return np.hstack((self.float_mass_solvent, self.log_mass_solute, self.temperature, self.velocity, self.position))
