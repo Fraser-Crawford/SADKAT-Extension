@@ -25,7 +25,6 @@ class UnifromCase(unittest.TestCase):
 
 class RadialCase(unittest.TestCase):
     def setUp(self):
-        print(inspect.signature(RadialDroplet.__init__))
         self.droplet = RadialDroplet.from_mfs(viscous_aqueous_NaCl,Atmosphere(293),np.array([0,0,0]),50e-6,0.1,293,layers=10)
 
     def test_copy(self):
