@@ -10,7 +10,7 @@ def density_water(temperature):
     Originally from:
 
         Wagner and Pruss Addendum to J. Phys. Chem. Ref. Data 16, 893 (1987),
-        J. Phys. Chem. Ref. Data, 1993, 22, 783–787)
+        J. Phys. Chem. Ref. Data, 1993, 22, 783–787
 
     Args:
         temperature: temperature in Kelvin.

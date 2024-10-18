@@ -37,10 +37,53 @@ class Droplet(ABC):
     def dxdt(self):
         """The time derivative of the state of the droplet."""
         pass
-    @abstractmethod
+
     def dmdt(self):
-        """The time derivative of the mass of solvent in the droplet."""
-        pass
+        """Time derivative of mass, i.e. the rate of evaporation in kg/s."""
+        Sh = self.sherwood_number
+
+        D_function = self.solution.solvent.vapour_binary_diffusion_coefficient
+        lam = D_function.lam
+
+        T_inf = self.environment.temperature
+        T = self.temperature
+        D_inf = D_function(T_inf)
+
+        # Apply temperature correction to diffusion coefficient appearing in mass flux.
+        eps = 1e-8
+        if np.abs(T_inf - T) < eps:
+            C = 1  # ensure numerical stability as T -> T_inf
+        else:
+            C = (T_inf - T) / T_inf ** (lam - 1) * (2 - lam) / (T_inf ** (2 - lam) - T ** (2 - lam))
+        D_eff = C * D_inf
+
+        I = np.log((self.environment.pressure - self.vapour_pressure) /
+                   (self.environment.pressure - self.environment.vapour_pressure))
+
+        beta = self.fuchs_sutugin_correction
+
+        return 4 * np.pi * self.radius * self.environment.density * (
+                self.solution.solvent.molar_mass / self.environment.molar_mass) * D_eff * Sh * beta * I
+
+    def dTdt(self):
+        """Time derivative of temperature from heat flux at the surface in K/s."""
+        Nu = self.nusselt_number
+        Gamma = 5.67e-8
+
+        m = self.mass
+        rho = self.density
+
+        T = self.temperature
+        T_inf = self.environment.temperature
+        K = self.environment.thermal_conductivity
+
+        L = self.solution.solvent.specific_latent_heat_vaporisation(T)
+        c = self.solution.solvent.specific_heat_capacity(T)
+        r = self.radius
+
+        return 3 * K * (T_inf - T) * Nu / (c * rho * r ** 2) + L * self.dmdt() / (c * m) - 3 * Gamma * (
+                T ** 4 - T_inf ** 4) / (c * rho * r)
+
     @abstractmethod
     def mass_solute(self) -> float:
         """Returns the mass of solute in the droplet in kg."""
@@ -174,34 +217,6 @@ class Droplet(ABC):
     def speed(self):
         """Magnitude of velocity vector in metres/second."""
         return np.linalg.norm(self.velocity)
-
-    # @property
-    # def jet_velocity(self):
-
-    #     jet_initial_velocity = np.array([1,0,0]) * self.jet_initial_speed
-
-    #     jet_dispersion_distance = 6.8 #assuming 6.8 from Xie paper
-    #     jet_centreline_speed = (jet_initial_speed * jet_dispersion_distance) / (self.position[0] / self.aperture_diameter)
-
-    #     jet_radial_velocity = 1
-    #     jet_axial_velocity = 1
-
-    #     theta = np.arctan2(self.position[2], self.position[0])
-    #     r = np.linalg.norm(self.position)
-    #     jet_velocity = np.array([1,
-    #                              0,
-    #                              3])
-
-    #     jet_centreline_temperature = self.environment.temperature + (self.jet_initial_temperature - self.environment.temperature) *
-
-    #                                 (5 / s_bar) * np.sqrt(self.jet_initial_temperature / self.environment.temperature)
-
-    #     #This assumes that the closest point on the centreline wil be vertically above or below the droplet
-    #     jet_centreline_position = np.array([self.position[0], 0
-    #                                         np.sqrt(self.aperture_area ) * 0.0354 * self.jet_archimedes_number *
-    #                                         (self.position[0] / np.sqrt(self.aperture_area) ) ** 3 *
-    #                                         np.sqrt(self.jet_initial_temperature / self.environment.temperature) ])
-    #     return 0
 
     @property
     def relative_velocity(self):
@@ -337,16 +352,17 @@ class Droplet(ABC):
         events = []
         if terminate_on_equilibration:
             m0 = self.mass
-            equilibrated = lambda t, x: np.abs(self.virtual_droplet(x).dmdt()) - equ_threshold * m0
+            equilibrated = lambda time, x: np.abs(self.virtual_droplet(x).dmdt()) - equ_threshold * m0
             equilibrated.terminal = True
             events += [equilibrated]
 
         if terminate_on_efflorescence:
-            efflorescing = lambda t, x: self.virtual_droplet(x).surface_solvent_activity() - eff_threshold
+            efflorescing = lambda time, x: self.virtual_droplet(x).surface_solvent_activity() - eff_threshold
             efflorescing.terminal = True
             events += [efflorescing]
 
-        dxdt = lambda t, x: self.virtual_droplet(x).dxdt()
+        dxdt = lambda time, x: self.virtual_droplet(x).dxdt()
+        # noinspection PyTypeChecker
         trajectory = solve_ivp(dxdt, (0, t), self.state(), first_step=first_step, rtol=rtol, events=events)
 
         self.set_state(trajectory.y[:, -1])
