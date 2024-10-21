@@ -1,7 +1,6 @@
 import numpy as np
 from attr import dataclass
 from scipy.integrate import solve_ivp
-from shapely import boundary
 
 from droplet import Droplet
 from environment import Environment
