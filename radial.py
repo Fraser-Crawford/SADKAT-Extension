@@ -109,7 +109,7 @@ class RadialDroplet(Droplet):
             result[i] += values[i]
             if i != self.outer_layer_index:
                 result[i + 1] -= values[i]
-            result *= 4.0 * np.pi
+        result *= 4.0 * np.pi
         return self.correct_derivative(result)
 
     @property
