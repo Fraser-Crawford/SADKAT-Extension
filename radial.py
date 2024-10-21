@@ -1,6 +1,7 @@
 import numpy as np
 from attr import dataclass
 from scipy.integrate import solve_ivp
+from shapely import boundary
 
 from droplet import Droplet
 from environment import Environment
@@ -79,10 +80,10 @@ class RadialDroplet(Droplet):
         cumulative_layer_volumes = np.cumsum(self.layer_volumes)
         return np.cbrt(3 * cumulative_layer_volumes / (4 * np.pi))
 
-    @property
-    def concentration_gradients(self):
+    def concentration_gradients(self, boundaries):
         concentrations = self.concentrations
-        delta_rs = self.layer_widths
+        delta_rs = [boundary1-boundary0 for boundary0,boundary1 in zip(boundaries,boundaries[1:])]
+        delta_rs = [boundaries[0]] + delta_rs
         return [2.0 * (c1 - c0) / (dr1 + dr2) for c0, c1, dr1, dr2 in
                 zip(concentrations, concentrations[1:], delta_rs, delta_rs[1:])]
 
@@ -102,14 +103,16 @@ class RadialDroplet(Droplet):
     def dCdt(self):
         diffusion = self.diffusion_coefficients
         boundaries = self.layer_radii[:-1]
+        radius = self.radius
+        normalised_boundaries = boundaries / radius
         d_plus = np.array([(d1 + d0) / 2.0 for d0, d1 in zip(diffusion, diffusion[1:])])
-        values = d_plus * self.concentration_gradients * boundaries ** 2
+        values = d_plus * self.concentration_gradients(normalised_boundaries) * normalised_boundaries ** 2
         result = np.zeros(self.initial_layers)
         for i in range(self.outer_layer_index):
             result[i] += values[i]
             if i != self.outer_layer_index:
                 result[i + 1] -= values[i]
-        result *= 4.0 * np.pi
+        result *= 4.0 * np.pi * radius
         return self.correct_derivative(result)
 
     @property
