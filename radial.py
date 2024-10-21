@@ -100,11 +100,11 @@ class RadialDroplet(Droplet):
 
     def dCdt(self):
         diffusion = self.diffusion_coefficients
-        boundaries = self.layer_radii[:-1]
+        boundaries = self.layer_radii
         radius = self.radius
         normalised_boundaries = boundaries / radius
         d_plus = np.array([(d1 + d0) / 2.0 for d0, d1 in zip(diffusion, diffusion[1:])])
-        values = d_plus * self.concentration_gradients(normalised_boundaries) * normalised_boundaries ** 2
+        values = d_plus * self.concentration_gradients(normalised_boundaries) * normalised_boundaries[:-1] ** 2
         result = np.zeros(self.initial_layers)
         for i in range(self.outer_layer_index):
             result[i] += values[i]
