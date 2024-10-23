@@ -1,5 +1,6 @@
 from environment import Atmosphere
 from radial import RadialDroplet
+from solution_definitions import aqueous_ammonium_sulfate
 from uniform import UniformDroplet
 from viscous_defintions import viscous_aqueous_NaCl
 import matplotlib.pyplot as plt
@@ -17,7 +18,21 @@ def benchmark_droplet(droplet, label, efflorescence_threshold = 0.45, effloresce
     plt.plot(df.time,df.radius,label=f"{label}")
     plt.scatter(df.time.values[-1],df.radius.values[-1])
 
+def plot_solution(solution):
+    mfs = np.linspace(0.0,1.0,100)
+    plt.plot(mfs,solution.density(mfs))
+    plt.title("Density Fit")
+    plt.xlabel("Mass fraction of solute")
+    plt.ylabel("Density / kg/m3")
+    plt.show()
+    plt.plot(mfs, solution.activity(mfs))
+    plt.xlabel("Mass fraction of solute")
+    plt.ylabel("Solution activity")
+    plt.show()
+
 if __name__ == '__main__':
+    plot_solution(aqueous_ammonium_sulfate)
+
     layers = [1,2,3,4,5,10]
     benchmark_droplet(UniformDroplet.from_mfs(test_solution, environment, gravity, radius, mfs, temperature), "Uniform",
                       efflorescence_termination=True)

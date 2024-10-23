@@ -65,7 +65,7 @@ class UniformDroplet(Droplet):
         return self.mass / self.density
 
     def surface_solvent_activity(self) -> float:
-        return self.solution.solvent_activity_from_mass_fraction_solute(self.mass_fraction_solute)
+        return self.solution.activity(self.mass_fraction_solute)
 
     def virtual_droplet(self, x) -> Self:
         x = (x[0], x[1], x[2:5], x[5:])

@@ -200,7 +200,7 @@ class Droplet(ABC):
     @property
     def vapour_pressure(self):
         """Vapour pressure at gas-liquid boundary in Pascals."""
-        P = self.solution.solvent_activity_from_mass_fraction_solute(
+        P = self.solution.activity(
             self.mass_fraction_solute) * self.solution.solvent.equilibrium_vapour_pressure(self.temperature)
         P *= kelvin_effect(self.solution.solvent.surface_tension(self.temperature),
                            self.solution.solvent.density(self.temperature),
