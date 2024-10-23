@@ -13,6 +13,10 @@ from solution import Solution
 @dataclass
 class UniformDroplet(Droplet):
 
+    def convert(self, mass_water):
+        return UniformDroplet(self.solution, self.environment, self.gravity, self.environment.temperature, self.velocity,
+                       self.position, mass_water, self.mass_solute())
+
     def solver(self, dxdt, time_range, first_step, rtol, events):
         return solve_ivp(dxdt, time_range, self.state(), first_step=first_step, rtol=rtol, events=events)
 

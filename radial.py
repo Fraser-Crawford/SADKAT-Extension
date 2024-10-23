@@ -3,12 +3,14 @@ from attr import dataclass
 from scipy.integrate import solve_ivp
 from droplet import Droplet
 from environment import Environment
+from uniform import UniformDroplet
 from viscous_solution import ViscousSolution
 
 
 @dataclass
 class RadialDroplet(Droplet):
     """Class for describing a droplet with a non-uniform but radially symmetric composition"""
+
     solution: ViscousSolution
     environment: Environment
     gravity: np.array  # m/s^2
@@ -46,6 +48,11 @@ class RadialDroplet(Droplet):
         equilibrium_solvent_mass = (1 - mass_fraction_solute) * solution.density(mass_fraction_solute) * volumes
         return RadialDroplet(solution, environment, gravity, temperature, velocity, position, equilibrium_solvent_mass,
                              mass_solvent, log_mass_solute)
+
+    def convert(self, mass_water):
+        return UniformDroplet(self.solution, self.environment, self.gravity, self.environment.temperature,
+                                self.velocity,
+                                self.position, mass_water, self.mass_solute())
 
     def set_state(self, state):
         self.float_mass_solvent, self.log_mass_solute, self.temperature, self.velocity, self.position = state[0], state[1:self.initial_layers + 1], \

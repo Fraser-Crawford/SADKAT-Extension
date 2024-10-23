@@ -1,6 +1,6 @@
 from environment import Atmosphere
 from radial import RadialDroplet
-from solution_definitions import aqueous_ammonium_sulfate
+from solution_definitions import aqueous_ammonium_sulfate, aqueous_NaCl
 from uniform import UniformDroplet
 from viscous_defintions import viscous_aqueous_NaCl
 import matplotlib.pyplot as plt
@@ -32,6 +32,10 @@ def plot_solution(solution):
 
 if __name__ == '__main__':
     plot_solution(aqueous_ammonium_sulfate)
+
+    droplet = UniformDroplet.from_mfs(aqueous_NaCl,Atmosphere(293,0.5),np.array([0,0,0]),50e-6,0.1,293)
+    eq_droplet = droplet.equilibrium_droplet()
+    print(eq_droplet.complete_state["radius"])
 
     layers = [1,2,3,4,5,10]
     benchmark_droplet(UniformDroplet.from_mfs(test_solution, environment, gravity, radius, mfs, temperature), "Uniform",
