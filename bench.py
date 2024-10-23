@@ -32,21 +32,8 @@ def plot_solution(solution):
 
 if __name__ == '__main__':
     plot_solution(aqueous_ammonium_sulfate)
-
-    droplet = UniformDroplet.from_mfs(aqueous_NaCl,Atmosphere(293,0.5),np.array([0,0,0]),50e-6,0.1,293)
+    plot_solution(aqueous_NaCl)
+    print(aqueous_ammonium_sulfate.concentration(0.1))
+    droplet = UniformDroplet.from_mfs(aqueous_ammonium_sulfate,Atmosphere(293,0.86),np.array([0,0,0]),50e-6,0.1,293)
     eq_droplet = droplet.equilibrium_droplet()
     print(eq_droplet.complete_state["radius"])
-
-    layers = [1,2,3,4,5,10]
-    benchmark_droplet(UniformDroplet.from_mfs(test_solution, environment, gravity, radius, mfs, temperature), "Uniform",
-                      efflorescence_termination=True)
-    droplets = []
-    plt.title("Radial Droplet: number of layers comparison")
-    for layer in layers:
-        droplets.append(RadialDroplet.from_mfs(test_solution,environment,gravity,radius,mfs,temperature,layer))
-    for droplet in droplets:
-        print(droplet.initial_layers)
-        benchmark_droplet(droplet,droplet.initial_layers,efflorescence_termination=True)
-
-    plt.legend()
-    plt.show()

@@ -381,8 +381,6 @@ class Droplet(ABC):
         dxdt = lambda time, x: self.virtual_droplet(x).dxdt()
 
         trajectory = self.solver(dxdt,(0,t), first_step, rtol, events)
-
-        self.set_state(trajectory.y[:, -1])
         return trajectory
 
     def complete_trajectory(self, trajectory):
