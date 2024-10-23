@@ -3,7 +3,7 @@ This project aims to extend the functionality of SADKAT (https://github.com/tran
 
 To use:
 1. Clone the repo to your machine.
-2. Install the dependecies found in "requirements.txt" using your package manager of choice (pip / conda) via `pip install -r requirements.txt` or `conda install -r requirements.txt`.
+2. Install the dependecies found in "requirements.txt" using your package manager of choice (pip / conda).
 3. Make a new "main.py"/"notebook.ipynb" file in the folder.
 4. In that file, import solution_definitions, viscous_definitions, uniform and radial
    
