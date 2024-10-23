@@ -65,7 +65,7 @@ class RadialDroplet(Droplet):
         return np.sum(self.layer_volumes)
 
     def surface_solvent_activity(self) -> float:
-        return self.solution.solvent_activity_from_mass_fraction_solute(
+        return self.solution.activity(
             self.layer_mass_fraction_solute[self.outer_layer_index])
 
     @property

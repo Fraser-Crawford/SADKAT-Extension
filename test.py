@@ -7,7 +7,7 @@ from radial import RadialDroplet
 from solution_definitions import aqueous_NaCl
 from uniform import UniformDroplet
 from viscous_defintions import viscous_aqueous_NaCl
-
+import matplotlib.pyplot as plt
 
 class UnifromCase(unittest.TestCase):
     def setUp(self):
@@ -39,3 +39,4 @@ class RadialCase(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

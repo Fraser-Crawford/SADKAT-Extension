@@ -18,7 +18,7 @@ class Solution:
       # a fitting function for solvent activity (unitless) in
     # terms of the mass fraction of solute, or None (the
     # default) to assume Raoult's law for ideal mixtures
-    solvent_activity_from_mass_fraction_solute: Callable[[float|npt.NDArray[np.float_]], float|npt.NDArray[np.float_]]
+    activity: Callable[[float | npt.NDArray[np.float_]], float | npt.NDArray[np.float_]]
     solid_refractive_index: float
 
     def mole_fraction_solute(self, mass_fraction_solute):
