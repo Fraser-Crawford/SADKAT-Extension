@@ -1,10 +1,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing_extensions import Self
-
 import numpy as np
 import pandas as pd
-from scipy.integrate import solve_ivp
 import numpy.typing as npt
 from environment import Environment
 from fit import kelvin_effect
