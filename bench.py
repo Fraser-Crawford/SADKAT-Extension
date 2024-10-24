@@ -34,8 +34,8 @@ def plot_solution(solution):
 
 if __name__ == '__main__':
     layers = 100
-    temp = 313
-    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, layers)
+    temp = 293
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.5, temp, layers)
     trajectory = radial.integrate(2)
     df = radial.complete_trajectory(trajectory)
     plt.plot(df.time,df.radius)
@@ -47,7 +47,7 @@ if __name__ == '__main__':
     positions += [[df["radius"].values[i] for i in range(len(df["radius"].values))]]
     for i in range(layers):
         concentrations += [[df["layer_concentration"].values[j][i] for j in range(len(df["layer_concentration"].values))]]
-    uniform = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, )
+    uniform = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.5, temp, )
     trajectory = uniform.integrate(2)
     df2 = uniform.complete_trajectory(trajectory)
     plt.scatter(df2.time, df2.radius)
@@ -55,5 +55,5 @@ if __name__ == '__main__':
     plt.show()
     for r,conc in zip(positions,concentrations):
         plt.plot(df.time,conc)
-    plt.plot(df2.time,df2.concentration)
+    plt.scatter(df2.time,df2.concentration)
     plt.show()

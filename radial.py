@@ -51,7 +51,7 @@ class RadialDroplet(Droplet):
         mass = volume * solution.density(mass_fraction_solute)
         mass_solvent = (1 - mass_fraction_solute) * mass
         mass_solute = mass_fraction_solute * mass
-        cell_boundaries = radius/np.array([i for i in range(layers,1,-1)])
+        cell_boundaries = radius*np.array([i/layers for i in range(1,layers)])
         concentration = mass_solute/volume
         real_boundaries = np.concatenate(([0],cell_boundaries,[radius]))
         layer_mass_solute = np.array([4/3*np.pi*(r1**3-r0**3)*concentration for r0,r1 in zip(real_boundaries,real_boundaries[1:])])
@@ -80,7 +80,7 @@ class RadialDroplet(Droplet):
 
     @property
     def deviation(self):
-        return self.cell_boundaries - self.radius/np.array([i for i in range(self.layers,1,-1)])
+        return self.cell_boundaries - self.radius*np.array([i/self.layers for i in range(1,self.layers)])
 
     def boundary_acceleration(self):
         return (self.cell_velocities*damping-stiffness*self.deviation/self.radius)/layer_inertia
