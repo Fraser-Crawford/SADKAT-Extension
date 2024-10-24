@@ -12,6 +12,8 @@ from solution import Solution
 
 @dataclass
 class UniformDroplet(Droplet):
+    float_mass_solvent: float
+    float_mass_solute: float
 
     def convert(self, mass_water):
         return UniformDroplet(self.solution, self.environment, self.gravity, self.environment.temperature, self.velocity,
@@ -19,15 +21,6 @@ class UniformDroplet(Droplet):
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
         return solve_ivp(dxdt, time_range, self.state(), first_step=first_step, rtol=rtol, events=events)
-
-    solution: Solution
-    environment: Environment
-    gravity: np.array  # m/s^2
-    temperature: float  # K
-    velocity: np.array
-    position: np.array
-    float_mass_solvent: float
-    float_mass_solute: float
 
     @staticmethod
     def from_mfs(solution, environment, gravity,
@@ -64,9 +57,6 @@ class UniformDroplet(Droplet):
 
     def mass_solvent(self) -> float:
         return self.float_mass_solvent
-
-    def volume(self) -> float:
-        return self.mass / self.density
 
     def surface_solvent_activity(self) -> float:
         return self.solution.activity(self.mass_fraction_solute)

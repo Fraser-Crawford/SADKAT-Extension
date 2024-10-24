@@ -180,10 +180,9 @@ class Droplet(ABC):
         """Droplet density in kg/m^3."""
         return self.solution.density(self.mass_fraction_solute)
 
-    @abstractmethod
     def volume(self)->float:
         """Returns the volume of the droplet in m3."""
-        pass
+        return self.mass/self.density
 
     @property
     def radius(self):
