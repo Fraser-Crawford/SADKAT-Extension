@@ -118,13 +118,14 @@ class Droplet(ABC):
 
         This form is ready for a row within a table specifying e.g. a droplet's trajectory.
         """
-        return dict(mass=self.mass,
+        result =  dict(mass=self.mass,
                     mass_solute=self.mass_solute(),
                     mass_solvent=self.mass_solvent(),
                     mass_fraction_solute=self.mass_fraction_solute,
                     mass_fraction_solvent=self.mass_fraction_solvent,
                     mole_fraction_solute=self.mole_fraction_solute,
                     mole_fraction_solvent=self.mole_fraction_solvent,
+                    concentration=self.mass_solute()/self.volume(),
                     density=self.density,
                     radius=self.radius,
                     refractive_index=self.refractive_index,
@@ -147,6 +148,10 @@ class Droplet(ABC):
                     gy=self.gravity[1],
                     gz=self.gravity[2],
                     )
+        return {**result, **self.extra_results()}
+    @abstractmethod
+    def extra_results(self):
+        pass
 
     @property
     def mass(self):

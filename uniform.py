@@ -12,6 +12,9 @@ from solution import Solution
 
 @dataclass
 class UniformDroplet(Droplet):
+    def extra_results(self):
+        return dict()
+
     float_mass_solvent: float
     float_mass_solute: float
 

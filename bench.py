@@ -1,3 +1,5 @@
+from scipy.stats import uniform
+
 from environment import Atmosphere
 from radial import RadialDroplet
 from solution_definitions import aqueous_ammonium_sulfate, aqueous_NaCl
@@ -31,9 +33,27 @@ def plot_solution(solution):
     plt.show()
 
 if __name__ == '__main__':
-    plot_solution(aqueous_ammonium_sulfate)
-    plot_solution(aqueous_NaCl)
-    print(aqueous_ammonium_sulfate.concentration(0.1))
-    droplet = UniformDroplet.from_mfs(aqueous_ammonium_sulfate,Atmosphere(293,0.86),np.array([0,0,0]),50e-6,0.1,293)
-    eq_droplet = droplet.equilibrium_droplet()
-    print(eq_droplet.complete_state["radius"])
+    layers = 100
+    temp = 313
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, layers)
+    trajectory = radial.integrate(2)
+    df = radial.complete_trajectory(trajectory)
+    plt.plot(df.time,df.radius)
+    positions = []
+    concentrations = []
+    for i in range(layers-1):
+        positions += [[df["layer_boundaries"].values[j][i] for j in range(len(df["layer_boundaries"].values))]]
+        plt.plot(df.time,positions[-1])
+    positions += [[df["radius"].values[i] for i in range(len(df["radius"].values))]]
+    for i in range(layers):
+        concentrations += [[df["layer_concentration"].values[j][i] for j in range(len(df["layer_concentration"].values))]]
+    uniform = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, )
+    trajectory = uniform.integrate(2)
+    df2 = uniform.complete_trajectory(trajectory)
+    plt.scatter(df2.time, df2.radius)
+
+    plt.show()
+    for r,conc in zip(positions,concentrations):
+        plt.plot(df.time,conc)
+    plt.plot(df2.time,df2.concentration)
+    plt.show()

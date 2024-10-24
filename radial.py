@@ -9,11 +9,18 @@ from uniform import UniformDroplet
 from viscous_solution import ViscousSolution
 
 layer_inertia = 1.0
-stiffness = 1.0
+stiffness = 10.0
 damping = 2*np.sqrt(stiffness*layer_inertia)
 
 @dataclass
 class RadialDroplet(Droplet):
+    def extra_results(self):
+        return dict(
+            layer_mass_solute=self.layer_mass_solute[:],
+            layer_concentration=self.layer_concentration,
+            layer_boundaries=self.cell_boundaries,
+        )
+
     solution: ViscousSolution
     total_mass_solvent: float
     cell_boundaries: npt.NDArray[np.float_]
@@ -40,14 +47,16 @@ class RadialDroplet(Droplet):
             velocity: in metres/second (3-dimensional vector)
             position: in metres (3-dimensional vector)
         """
-        mass = 4 * np.pi / 3 * radius ** 3 * solution.density(mass_fraction_solute)
+        volume = 4 * np.pi / 3 * radius ** 3
+        mass = volume * solution.density(mass_fraction_solute)
         mass_solvent = (1 - mass_fraction_solute) * mass
         mass_solute = mass_fraction_solute * mass
-        layer_solvent_masses = np.full(mass_solvent/layers,layers)
-        cell_boundaries = radius/np.array([i for i in range(layers,0,-1)])
-        concentrations = solution.concentration(mass_solute/(mass_solute+layer_solvent_masses))
-        return RadialDroplet(solution, environment, gravity, temperature, velocity, position, mass_solvent,
-                              mass_solute,cell_boundaries,concentrations)
+        cell_boundaries = radius/np.array([i for i in range(layers,1,-1)])
+        concentration = mass_solute/volume
+        real_boundaries = np.concatenate(([0],cell_boundaries,[radius]))
+        layer_mass_solute = np.array([4/3*np.pi*(r1**3-r0**3)*concentration for r0,r1 in zip(real_boundaries,real_boundaries[1:])])
+        cell_velocities = np.zeros(len(cell_boundaries))
+        return RadialDroplet(solution,environment,gravity,temperature,velocity,position,mass_solvent,cell_boundaries,cell_velocities,layer_mass_solute)
 
     def state(self) -> npt.NDArray[np.float_]:
         return np.hstack((self.cell_boundaries, self.cell_velocities, self.layer_mass_solute, self.total_mass_solvent, self.temperature, self.velocity, self.position))
@@ -67,11 +76,11 @@ class RadialDroplet(Droplet):
         self.cell_boundaries, self.cell_velocities, self.layer_mass_solute, self.total_mass_solvent, self.temperature, self.velocity, self.position = self.split_state(state)
 
     def dxdt(self) -> npt.NDArray[np.float_]:
-        return np.hstack((self.boundary_correction(),self.boundary_acceleration(),self.change_in_solute_mass(),self.dmdt(),self.dTdt,self.dvdt(),self.drdt()))
+        return np.hstack((self.boundary_correction(),self.boundary_acceleration(),self.change_in_solute_mass(),self.dmdt(),self.dTdt(),self.dvdt(),self.drdt()))
 
     @property
     def deviation(self):
-        return self.cell_boundaries - self.radius/np.array([i for i in range(self.layers,0,-1)])
+        return self.cell_boundaries - self.radius/np.array([i for i in range(self.layers,1,-1)])
 
     def boundary_acceleration(self):
         return (self.cell_velocities*damping-stiffness*self.deviation/self.radius)/layer_inertia
@@ -88,7 +97,7 @@ class RadialDroplet(Droplet):
     def layer_concentration(self):
         return self.layer_mass_solute/self.layer_volume
 
-    def change_in_solute_mass(self):
+    def redistribute(self):
         sign = np.sign(self.cell_velocities)
         volume_corrections = 4/3*np.pi*(self.cell_boundaries**2*self.cell_velocities)
         concentrations = self.layer_concentration
@@ -105,6 +114,29 @@ class RadialDroplet(Droplet):
                 result[i+1] -= value
 
         return result
+    @property
+    def layer_mass_fraction_solute(self):
+        return self.layer_mass_solute/(self.layer_mass_solute+self.mass_solvent())
+
+    def get_gradients(self,normalised_boundaries):
+        concentrations = self.layer_concentration
+        delta_rs = [r1-r0 for r0,r1 in zip(normalised_boundaries,normalised_boundaries[1:])]
+        return [(c1-c0)/delta_r for c0,c1,delta_r in zip(concentrations,concentrations[1:],delta_rs)]
+
+    def change_in_solute_mass(self):
+        radius = self.radius
+        result = self.redistribute()
+        full_boundaries = np.concatenate(([0],self.cell_boundaries,[radius]))
+        layer_diffusion= self.solution.diffusion(self.layer_mass_fraction_solute,self.temperature)
+        average_diffusion = [(d1+d2)/2 for d1,d2 in zip(layer_diffusion,layer_diffusion[1:])]
+        normalised_boundaries = full_boundaries/radius
+        gradients = self.get_gradients(normalised_boundaries)
+        diffusion = np.zeros(self.layers)
+        for i in range(self.layers-1):
+            value = 4*np.pi*radius*average_diffusion[i]*gradients[i]*normalised_boundaries[i+1]**2
+            diffusion[i] += value
+            diffusion[i+1] -= value
+        return result + diffusion
 
     def mass_solute(self):
         return np.sum(self.layer_mass_solute)

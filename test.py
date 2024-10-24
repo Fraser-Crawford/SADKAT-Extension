@@ -31,7 +31,7 @@ class RadialCase(unittest.TestCase):
         self.assertEqual(self.droplet.state().all(),self.droplet.copy().state().all(),"Copied droplet is not the same as original droplet")
 
     def test_complete_state(self):
-        self.assertEqual(self.droplet.float_mass_solvent, self.droplet.complete_state["mass_solvent"])
+        self.assertEqual(self.droplet.total_mass_solvent, self.droplet.complete_state["mass_solvent"])
 
     def test_integrate(self):
         trajectory = self.droplet.integrate(1)

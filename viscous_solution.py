@@ -8,4 +8,4 @@ from solution import Solution
 
 @dataclass
 class ViscousSolution(Solution):
-    diffusion: Callable[[float|npt.NDArray[np.float_], float], float]
+    diffusion: Callable[[float|npt.NDArray[np.float_], float], float|npt.NDArray[np.float_]]
