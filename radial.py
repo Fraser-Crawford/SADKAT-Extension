@@ -8,7 +8,7 @@ from droplet import Droplet
 from uniform import UniformDroplet
 from viscous_solution import ViscousSolution
 
-layer_inertia = 1.0
+layer_inertia = 0.1
 stiffness = 10.0
 damping = 2*np.sqrt(stiffness*layer_inertia)
 
@@ -19,6 +19,10 @@ class RadialDroplet(Droplet):
             layer_mass_solute=self.layer_mass_solute[:],
             layer_concentration=self.layer_concentration,
             layer_boundaries=self.cell_boundaries,
+            surface_concentration=self.layer_concentration[-1],
+            average_diffusion = self.solution.diffusion(self.mass_fraction_solute,self.temperature),
+            surface_diffusion = self.solution.diffusion(self.layer_mass_fraction_solute[-1],self.temperature),
+            layer_mass_fraction_solute = self.layer_mass_fraction_solute[:]
         )
 
     solution: ViscousSolution
@@ -114,9 +118,15 @@ class RadialDroplet(Droplet):
                 result[i+1] -= value
 
         return result
+
+    @property
+    def layer_density(self):
+        return self.solution.concentration_to_solute_mass_fraction(self.layer_concentration)
+
     @property
     def layer_mass_fraction_solute(self):
-        return self.layer_mass_solute/(self.layer_mass_solute+self.mass_solvent())
+        concentration = self.layer_mass_solute/self.layer_volume
+        return self.solution.concentration_to_solute_mass_fraction(concentration)
 
     def get_gradients(self,normalised_boundaries):
         concentrations = self.layer_concentration

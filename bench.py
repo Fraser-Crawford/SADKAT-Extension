@@ -33,27 +33,42 @@ def plot_solution(solution):
     plt.show()
 
 if __name__ == '__main__':
-    layers = 100
-    temp = 293
-    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.5, temp, layers)
+    layers = 10
+    temp = 313
+    print("Start")
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, layers)
     trajectory = radial.integrate(2)
+    print("integrated")
     df = radial.complete_trajectory(trajectory)
     plt.plot(df.time,df.radius)
     positions = []
     concentrations = []
+
     for i in range(layers-1):
         positions += [[df["layer_boundaries"].values[j][i] for j in range(len(df["layer_boundaries"].values))]]
         plt.plot(df.time,positions[-1])
     positions += [[df["radius"].values[i] for i in range(len(df["radius"].values))]]
+    print("positions set")
     for i in range(layers):
         concentrations += [[df["layer_concentration"].values[j][i] for j in range(len(df["layer_concentration"].values))]]
-    uniform = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.5, temp, )
+
+
+    uniform = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, )
     trajectory = uniform.integrate(2)
     df2 = uniform.complete_trajectory(trajectory)
     plt.scatter(df2.time, df2.radius)
-
     plt.show()
+
     for r,conc in zip(positions,concentrations):
         plt.plot(df.time,conc)
     plt.scatter(df2.time,df2.concentration)
+    plt.show()
+
+    plt.plot(df.time,df.surface_diffusion)
+    plt.show()
+    mfss = []
+    for i in range(layers):
+        mfss += [[df["layer_mass_fraction_solute"].values[j][i] for j in
+                  range(len(df["layer_mass_fraction_solute"].values))]]
+        plt.plot(df.time,mfss[i])
     plt.show()
