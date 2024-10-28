@@ -9,8 +9,8 @@ from uniform import UniformDroplet
 from viscous_solution import ViscousSolution
 
 
-layer_inertia = 1.5
-stiffness = 7.5
+layer_inertia = 1
+stiffness = 100
 damping = 2.0*np.sqrt(stiffness*layer_inertia)
 
 @dataclass
@@ -89,7 +89,7 @@ class RadialDroplet(Droplet):
         return self.cell_boundaries - self.radius*np.array([i/self.layers for i in range(1,self.layers)])
 
     def boundary_acceleration(self):
-        return (self.cell_velocities*damping-stiffness*self.deviation/self.radius)/layer_inertia
+        return (-self.cell_velocities*damping-stiffness*self.deviation/self.radius)/layer_inertia
 
     def boundary_correction(self):
         return self.cell_velocities

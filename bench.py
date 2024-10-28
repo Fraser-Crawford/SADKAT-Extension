@@ -37,7 +37,7 @@ if __name__ == '__main__':
     temp = 313
     print("Start")
     radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, layers)
-    trajectory = radial.integrate(2)
+    trajectory = radial.integrate(1)
     print("integrated")
     df = radial.complete_trajectory(trajectory)
     plt.plot(df.time,df.radius)
@@ -54,7 +54,7 @@ if __name__ == '__main__':
 
 
     uniform = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, )
-    trajectory = uniform.integrate(2)
+    trajectory = uniform.integrate(1)
     df2 = uniform.complete_trajectory(trajectory)
     plt.scatter(df2.time, df2.radius)
     plt.show()
