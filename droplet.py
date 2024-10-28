@@ -125,7 +125,7 @@ class Droplet(ABC):
                     mass_fraction_solvent=self.mass_fraction_solvent,
                     mole_fraction_solute=self.mole_fraction_solute,
                     mole_fraction_solvent=self.mole_fraction_solvent,
-                    concentration=self.mass_solute()/self.volume(),
+                    concentration=self.mass_solute()/self.volume,
                     density=self.density,
                     radius=self.radius,
                     refractive_index=self.refractive_index,
@@ -185,14 +185,14 @@ class Droplet(ABC):
         """Droplet density in kg/m^3."""
         return self.solution.density(self.mass_fraction_solute)
 
+    @property
     def volume(self)->float:
-        """Returns the volume of the droplet in m3."""
         return self.mass/self.density
 
     @property
     def radius(self):
         """Droplet radius in metres."""
-        return (self.volume() / (4 * np.pi / 3)) ** (1 / 3)
+        return (self.volume / (4 * np.pi / 3)) ** (1 / 3)
 
     @property
     def diameter(self):

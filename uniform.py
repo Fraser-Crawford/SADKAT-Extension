@@ -12,6 +12,7 @@ from solution import Solution
 
 @dataclass
 class UniformDroplet(Droplet):
+
     def extra_results(self):
         return dict()
 

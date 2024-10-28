@@ -33,7 +33,7 @@ def plot_solution(solution):
     plt.show()
 
 if __name__ == '__main__':
-    layers = 10
+    layers = 20
     temp = 313
     print("Start")
     radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, layers)
