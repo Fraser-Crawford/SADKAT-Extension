@@ -72,3 +72,23 @@ if __name__ == '__main__':
                   range(len(df["layer_mass_fraction_solute"].values))]]
         plt.plot(df.time,mfss[i])
     plt.show()
+
+
+
+    plt.plot(df.time,concentrations[-1]/df.concentration)
+    plt.show()
+
+    plt.plot(df.time,df.peclet)
+    plt.show()
+
+    plt.plot(df.time,df.real_enrichment)
+    plt.plot(df.time,df.predicted_enrichment,"--")
+    plt.show()
+    max_time = np.max(df.time)
+    step = max_time/20
+    current = 0
+    for i in range(0,len(df.time.values)):
+        if df.time.values[i] >= current:
+            plt.plot(df.layer_positions.values[i],df.layer_concentration.values[i])
+            current += step
+    plt.show()

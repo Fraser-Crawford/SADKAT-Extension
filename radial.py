@@ -16,6 +16,10 @@ damping = 2.0*np.sqrt(stiffness*layer_inertia)
 @dataclass
 class RadialDroplet(Droplet):
 
+    @property
+    def volume(self) -> float:
+        return np.sum(self.layer_volume)
+
     def extra_results(self):
         return dict(
             layer_mass_solute=self.log_mass_solute[:],
@@ -24,7 +28,12 @@ class RadialDroplet(Droplet):
             surface_concentration=self.layer_concentration[-1],
             average_diffusion = self.solution.diffusion(self.mass_fraction_solute,self.temperature),
             surface_diffusion = self.solution.diffusion(self.layer_mass_fraction_solute[-1],self.temperature),
-            layer_mass_fraction_solute = self.layer_mass_fraction_solute[:]
+            layer_mass_fraction_solute = self.layer_mass_fraction_solute[:],
+            peclet = self.peclet,
+            predicted_enrichment = self.predicted_enrichment,
+            real_enrichment = self.layer_concentration[-1]/self.concentration,
+            predicted_surface_concentration = self.concentration*self.predicted_enrichment,
+            layer_positions =  np.append(self.cell_boundaries,self.radius),
         )
 
     solution: ViscousSolution
@@ -32,6 +41,27 @@ class RadialDroplet(Droplet):
     cell_boundaries: npt.NDArray[np.float_]
     cell_velocities: npt.NDArray[np.float_]
     log_mass_solute: npt.NDArray[np.float_]
+
+    @property
+    def predicted_enrichment(self):
+        pe = self.peclet
+        return 1+pe/5+pe**2/100-pe**3/4000
+
+    @property
+    def surface_diffusion(self):
+        return self.solution.diffusion(self.layer_mass_fraction_solute[-1], self.temperature)
+
+    @property
+    def average_diffusion(self):
+        return self.solution.diffusion(self.mass_fraction_solute,self.temperature)
+
+    def density_derivative(self):
+        drho_dt = (self.solution.density(self.mass_fraction_solute+0.01)-self.solution.density(self.mass_fraction_solute-0.01))/0.02
+        return drho_dt*(-self.dmdt())*self.mass_fraction_solute**2/self.mass_solute()
+
+    @property
+    def peclet(self):
+        return (-self.dmdt()-self.density_derivative()*4.0/3.0*np.pi*self.radius**3)/(self.average_diffusion*4*np.pi*self.radius*self.density)
 
     @property
     def layers(self):
@@ -96,8 +126,14 @@ class RadialDroplet(Droplet):
 
     @property
     def layer_volume(self):
-        true_boundaries = np.concatenate(([0],self.cell_boundaries,[self.radius]))
-        return np.array([4/3*np.pi*(r1**3-r0**3) for r0,r1 in zip(true_boundaries,true_boundaries[1:])])
+        true_boundaries = np.concatenate(([0],self.cell_boundaries))
+        volumes = np.array([4/3*np.pi*(r1**3-r0**3) for r0,r1 in zip(true_boundaries,true_boundaries[1:])])
+        concentrations = self.layer_mass_solute[:-1] / volumes
+        mfss = self.solution.concentration_to_solute_mass_fraction(concentrations)
+        remaining_mass_of_solvent = self.mass_solvent()-np.sum(self.layer_mass_solute[:-1]*(1/mfss-1))
+        outer_mass_of_solute = self.layer_mass_solute[-1]
+        outer_mfs = outer_mass_of_solute/(outer_mass_of_solute+remaining_mass_of_solvent)
+        return np.append(volumes,(outer_mass_of_solute+remaining_mass_of_solvent)/self.solution.density(outer_mfs))
 
     @property
     def layer_concentration(self):
@@ -167,9 +203,9 @@ class RadialDroplet(Droplet):
         cell_boundaries, cell_velocities, layer_mass_solute, total_mass_solvent, temperature, velocity, position = self.split_state(x)
         return RadialDroplet(self.solution,self.environment,self.gravity,temperature,velocity,position,total_mass_solvent,cell_boundaries,cell_velocities,layer_mass_solute)
 
-    def convert(self, mass_water):
+    def convert(self, mass_solvent):
         return UniformDroplet(self.solution, self.environment, self.gravity, self.environment.temperature, self.velocity,
-                       self.position, mass_water, self.mass_solute())
+                       self.position, mass_solvent, self.mass_solute())
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
         unstable = lambda time, x: self.virtual_droplet(x).radius - self.virtual_droplet(x).cell_boundaries[-1]

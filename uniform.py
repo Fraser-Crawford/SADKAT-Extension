@@ -13,6 +13,10 @@ from solution import Solution
 @dataclass
 class UniformDroplet(Droplet):
 
+    @property
+    def volume(self) -> float:
+        return self.mass/self.density
+
     def extra_results(self):
         return dict()
 

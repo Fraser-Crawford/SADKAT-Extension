@@ -112,6 +112,10 @@ class Droplet(ABC):
         return self.virtual_droplet(self.state().copy())
 
     @property
+    def concentration(self):
+        return self.mass_solute()/self.volume
+
+    @property
     def complete_state(self):
         """All droplet variables, including both independent and dependent variables that completely
         determine all droplet properties.
@@ -125,7 +129,7 @@ class Droplet(ABC):
                     mass_fraction_solvent=self.mass_fraction_solvent,
                     mole_fraction_solute=self.mole_fraction_solute,
                     mole_fraction_solvent=self.mole_fraction_solvent,
-                    concentration=self.mass_solute()/self.volume,
+                    concentration=self.concentration,
                     density=self.density,
                     radius=self.radius,
                     refractive_index=self.refractive_index,
@@ -186,8 +190,9 @@ class Droplet(ABC):
         return self.solution.density(self.mass_fraction_solute)
 
     @property
+    @abstractmethod
     def volume(self)->float:
-        return self.mass/self.density
+        pass
 
     @property
     def radius(self):
