@@ -141,6 +141,7 @@ class Droplet(ABC):
                     prandtl_number=self.prandtl_number,
                     sherwood_number=self.sherwood_number,
                     nusselt_number=self.nusselt_number,
+                    volume = self.volume,
                     vx=self.velocity[0],
                     vy=self.velocity[1],
                     vz=self.velocity[2],

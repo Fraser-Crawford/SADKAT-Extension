@@ -33,7 +33,7 @@ def plot_solution(solution):
     plt.show()
 
 if __name__ == '__main__':
-    layers = 20
+    layers = 100
     temp = 313
     print("Start")
     radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(temp), np.array([0, 0, 0]), 50e-6, 0.1, temp, layers)
@@ -85,10 +85,13 @@ if __name__ == '__main__':
     plt.plot(df.time,df.predicted_enrichment,"--")
     plt.show()
     max_time = np.max(df.time)
-    step = max_time/20
-    current = 0
+    step = max_time/30
+    current = step
     for i in range(0,len(df.time.values)):
         if df.time.values[i] >= current:
             plt.plot(df.layer_positions.values[i],df.layer_concentration.values[i])
             current += step
+    plt.show()
+
+    plt.plot((df.mass / df.density)/df.volume)
     plt.show()
