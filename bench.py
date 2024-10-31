@@ -30,8 +30,10 @@ def plot_solution(solution):
     plt.show()
 
 def radial_bench():
+    print("Starting radial benchmark")
     radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(293), gravity, 50e-6, 0.2, 293, 20)
-    df = radial.complete_trajectory(radial.integrate(2, terminate_on_efflorescence=True, eff_threshold=0.45))
+    df = radial.complete_trajectory(radial.integrate(1))
+    print("Integrated")
     positions = []
     concentrations = []
     max_time = np.max(df.time)
