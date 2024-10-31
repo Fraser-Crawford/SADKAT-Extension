@@ -142,7 +142,8 @@ class RadialDroplet(Droplet):
 
     def redistribute(self):
         sign = np.sign(self.cell_velocities)
-        volume_corrections = 4/3*np.pi*(self.cell_boundaries**2*self.cell_velocities)
+
+        volume_corrections = 4*np.pi*(self.cell_boundaries**2*self.cell_velocities)
         concentrations = self.layer_concentration
         result = np.zeros(self.layers)
 
