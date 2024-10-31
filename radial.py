@@ -34,6 +34,7 @@ class RadialDroplet(Droplet):
             real_enrichment = self.layer_concentration[-1]/self.concentration,
             predicted_surface_concentration = self.concentration*self.predicted_enrichment,
             layer_positions =  np.append(self.cell_boundaries,self.radius),
+            all_boundaries = np.concatenate((self.cell_boundaries,[self.radius]))
         )
 
     solution: ViscousSolution
@@ -209,6 +210,6 @@ class RadialDroplet(Droplet):
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
         unstable = lambda time, x: self.virtual_droplet(x).radius - self.virtual_droplet(x).cell_boundaries[-1]
-        unstable.terminating = True
+        unstable.terminal = True
         events.append(unstable)
         return solve_ivp(dxdt, time_range, self.state(), first_step=first_step, rtol=rtol, events=events, method="Radau")

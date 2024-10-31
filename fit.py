@@ -2,7 +2,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 import numpy as np
 from fluids.constants import gas_constant
-
+import scipy
 @dataclass
 class VapourBinaryDiffusionCoefficient:
     """Standard fitting function to describe the temperature dependence
@@ -160,3 +160,8 @@ def ActivityVsMfsParametrisation(coefficients):
 def DensityVsMassFractionFit(coefficients)->Callable[[float],float]:
     return lambda mfs: np.poly1d(np.flipud(coefficients))(np.sqrt(mfs))
 
+def enrichment_factor(Pe):
+    return lambda R: R**2*np.exp(Pe/2.0*R**2)
+
+def beta(Pe):
+    return scipy.integrate.quad(enrichment_factor(Pe), 0,1)[0]
