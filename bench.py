@@ -29,26 +29,61 @@ def plot_solution(solution):
     plt.ylabel("Solution activity")
     plt.show()
 
+def peclet_bench():
+    print("Starting 20 layer")
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, 20)
+    df = radial.complete_trajectory(radial.integrate(1))
+    print("Integrated")
+    plt.plot(df.time,df.real_enrichment,label="20 layer Surface Enrichment")
+    plt.plot(df.time,df.predicted_enrichment,"--",label="Predicted Surface Enrichment")
+    plt.plot(df.time, df.max_enrichment, "--", label="Max Surface Enrichment")
+    print("Starting 100 layer")
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, 100)
+    df = radial.complete_trajectory(radial.integrate(1))
+    print("Integrated")
+    plt.plot(df.time, df.real_enrichment, label="100 layer Surface Enrichment")
+    plt.legend()
+    plt.show()
+
 def radial_bench():
     print("Starting radial benchmark")
-    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(293), gravity, 50e-6, 0.2, 293, 20)
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, 20)
     df = radial.complete_trajectory(radial.integrate(1))
     print("Integrated")
     positions = []
     concentrations = []
     max_time = np.max(df.time)
     step = max_time / 20
-    goal = step
+    goal = 0
     for i in range(len(df.time.values)):
-        concentrations.append(df.layer_concentration[i])
-        positions.append(df.all_boundaries[i])
+        concentrations.append(df.layer_concentrations[i])
+        positions.append(df.layer_positions[i])
         time = df.time.values[i]
         if time >= goal:
-            plt.plot(df.all_boundaries[i], df.layer_concentration[i])
+            plt.plot(df.layer_positions[i], df.layer_concentrations[i])
             goal += step
     plt.plot(positions, concentrations, "--")
+    plt.xlim(left=0)
     plt.xlabel("Distance from center of droplet / m")
     plt.ylabel("Concentration / g/L")
+    plt.show()
+
+def dummy_suspension_bench():
+    suspension = SuspensionDroplet.from_mfp(test_suspension(10e-9),Atmosphere(313), gravity, 50e-6, 0.3, 313, layers=20)
+    df = suspension.complete_trajectory(suspension.integrate(2))
+    uniform = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.0, 313)
+    df2 = uniform.complete_trajectory(uniform.integrate(2))
+    plt.plot(df2.time, df2.radius, "--")
+    plt.plot(df.time,df.radius)
+    plt.xlabel("Time / s")
+    plt.ylabel("Droplet Radius / m")
+    plt.show()
+
+    plt.plot(df.time,df.surface_particle_concentration,label="Surface Particle Concentration")
+    plt.plot(df.time,df.average_particle_concentration,label="Average Particle Concentration")
+    plt.xlabel("Time / s")
+    plt.ylabel("Number Concentration / m-3")
+    plt.legend()
     plt.show()
 
 def silica_bench(droplet_radius,silica_volume_fraction):
@@ -58,7 +93,7 @@ def silica_bench(droplet_radius,silica_volume_fraction):
     solvent_volume = volume-particle_volume
     mass_fraction = particle_volume*2200/(solvent_volume*1000+particle_volume*2200)
     time_result = []
-    layers = [2,3,4,5,10,20,30,40,50,100,200,250]
+    layers = [2,3,4,5,10,20,30,40,50,60,70,80,90,100]
     for layer in layers:
         print(layer)
         suspension = SuspensionDroplet.from_mfp(silica_suspension,Atmosphere(303),gravity,droplet_radius,mass_fraction,303,layer)
@@ -85,6 +120,8 @@ def silica_bench(droplet_radius,silica_volume_fraction):
         plt.show()
         time_result.append(np.max(df.time))
     plt.plot(layers, time_result)
+    plt.xlabel("Layers")
+    plt.ylabel("Locking Point Time / s")
     plt.show()
 
 def pure_bench(radius,temperature,rh):
@@ -95,7 +132,16 @@ def pure_bench(radius,temperature,rh):
     plt.plot(df.time,df.radius)
     plt.show()
 
+def linear_layer_concentrations():
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, 20)
+    plt.plot(radial.all_positions(),radial.linear_layer_concentrations())
+    plt.scatter(radial.all_positions(),radial.linear_layer_concentrations())
+    plt.show()
+
 if __name__ == '__main__':
     #pure_bench(26.5e-6,303,0.1)
-    #silica_bench(26.5e-6,0.6e-2)
-    radial_bench()
+    silica_bench(26.5e-6,0.6e-2)
+    #radial_bench()
+    #peclet_bench()
+    #dummy_suspension_bench()
+    #linear_layer_concentrations()
