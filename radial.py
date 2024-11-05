@@ -18,23 +18,24 @@ class RadialDroplet(Droplet):
 
     @property
     def volume(self) -> float:
-        return np.sum(self.layer_volume)
+        return self.mass/self.density
 
     def extra_results(self):
         return dict(
             layer_mass_solute=self.log_mass_solute[:],
-            layer_concentration=self.layer_concentration,
+            average_layer_concentrations=self.average_layer_concentration,
+            layer_concentrations=self.linear_layer_concentrations(),
             layer_boundaries=self.cell_boundaries,
-            surface_concentration=self.layer_concentration[-1],
+            surface_concentration=self.linear_layer_concentrations()[-1],
             average_diffusion = self.solution.diffusion(self.mass_fraction_solute,self.temperature),
             surface_diffusion = self.solution.diffusion(self.layer_mass_fraction_solute[-1],self.temperature),
             layer_mass_fraction_solute = self.layer_mass_fraction_solute[:],
             peclet = self.peclet,
             predicted_enrichment = self.predicted_enrichment,
-            real_enrichment = self.layer_concentration[-1]/self.concentration,
+            max_enrichment = self.max_enrichment,
+            real_enrichment = self.linear_layer_concentrations()[-1]/self.concentration,
             predicted_surface_concentration = self.concentration*self.predicted_enrichment,
-            layer_positions =  np.append(self.cell_boundaries,self.radius),
-            all_boundaries = np.concatenate((self.cell_boundaries,[self.radius]))
+            layer_positions =  self.all_positions(),
         )
 
     solution: ViscousSolution
@@ -47,7 +48,10 @@ class RadialDroplet(Droplet):
     def predicted_enrichment(self):
         pe = self.peclet
         return 1+pe/5+pe**2/100-pe**3/4000
-
+    @property
+    def max_enrichment(self):
+        pe = self.surface_peclet
+        return 1 + pe / 5 + pe ** 2 / 100 - pe ** 3 / 4000
     @property
     def surface_diffusion(self):
         return self.solution.diffusion(self.layer_mass_fraction_solute[-1], self.temperature)
@@ -63,6 +67,10 @@ class RadialDroplet(Droplet):
     @property
     def peclet(self):
         return (-self.dmdt()-self.density_derivative()*4.0/3.0*np.pi*self.radius**3)/(self.average_diffusion*4*np.pi*self.radius*self.density)
+
+    @property
+    def surface_peclet(self):
+        return (-self.dmdt()-self.density_derivative()*4.0/3.0*np.pi*self.radius**3)/(self.surface_diffusion*4*np.pi*self.radius*self.density)
 
     @property
     def layers(self):
@@ -112,7 +120,7 @@ class RadialDroplet(Droplet):
     def set_state(self, state: npt.NDArray[np.float_]):
         self.cell_boundaries, self.cell_velocities, self.log_mass_solute, self.total_mass_solvent, self.temperature, self.velocity, self.position = self.split_state(state)
 
-    def dxdt(self) -> npt.NDArray[np.float_]:
+    def dxdt(self,time) -> npt.NDArray[np.float_]:
         return np.hstack((self.boundary_correction(),self.boundary_acceleration(),self.change_in_solute_mass(),self.dmdt(),self.dTdt(),self.dvdt(),self.drdt()))
 
     @property
@@ -127,24 +135,17 @@ class RadialDroplet(Droplet):
 
     @property
     def layer_volume(self):
-        true_boundaries = np.concatenate(([0],self.cell_boundaries))
-        volumes = np.array([4/3*np.pi*(r1**3-r0**3) for r0,r1 in zip(true_boundaries,true_boundaries[1:])])
-        concentrations = self.layer_mass_solute[:-1] / volumes
-        mfss = self.solution.concentration_to_solute_mass_fraction(concentrations)
-        remaining_mass_of_solvent = self.mass_solvent()-np.sum(self.layer_mass_solute[:-1]*(1/mfss-1))
-        outer_mass_of_solute = self.layer_mass_solute[-1]
-        outer_mfs = outer_mass_of_solute/(outer_mass_of_solute+remaining_mass_of_solvent)
-        return np.append(volumes,(outer_mass_of_solute+remaining_mass_of_solvent)/self.solution.density(outer_mfs))
+        true_boundaries = self.all_positions()
+        return np.array([4/3*np.pi*(r1**3-r0**3) for r0,r1 in zip(true_boundaries,true_boundaries[1:])])
 
     @property
-    def layer_concentration(self):
+    def average_layer_concentration(self):
         return self.layer_mass_solute/self.layer_volume
 
     def redistribute(self):
         sign = np.sign(self.cell_velocities)
-
         volume_corrections = 4*np.pi*(self.cell_boundaries**2*self.cell_velocities)
-        concentrations = self.layer_concentration
+        concentrations = self.linear_layer_concentrations()[1:]
         result = np.zeros(self.layers)
 
         for i in range(len(volume_corrections)):
@@ -161,7 +162,7 @@ class RadialDroplet(Droplet):
 
     @property
     def layer_density(self):
-        return self.solution.concentration_to_solute_mass_fraction(self.layer_concentration)
+        return self.solution.concentration_to_solute_mass_fraction(self.average_layer_concentration)
 
     @property
     def layer_mass_solute(self):
@@ -173,17 +174,15 @@ class RadialDroplet(Droplet):
         return self.solution.concentration_to_solute_mass_fraction(concentration)
 
     def get_gradients(self,normalised_boundaries):
-        concentrations = self.layer_concentration
-        delta_rs = [r1-r0 for r0,r1 in zip(normalised_boundaries,normalised_boundaries[1:])]
-        return [(c1-c0)/delta_r for c0,c1,delta_r in zip(concentrations,concentrations[1:],delta_rs)]
+        concentrations = self.linear_layer_concentrations()
+        return np.array([(c2-c0)/(r2-r0) for r0,r2,c0,c2 in zip(normalised_boundaries[:-2],normalised_boundaries[2:],concentrations[:-2],concentrations[2:])])
 
     def change_in_solute_mass(self):
         radius = self.radius
         result = self.redistribute()
-        full_boundaries = np.concatenate(([0],self.cell_boundaries,[radius]))
         layer_diffusion= self.solution.diffusion(self.layer_mass_fraction_solute,self.temperature)
         average_diffusion = [(d1+d2)/2 for d1,d2 in zip(layer_diffusion,layer_diffusion[1:])]
-        normalised_boundaries = full_boundaries/radius
+        normalised_boundaries = self.all_positions()/radius
         gradients = self.get_gradients(normalised_boundaries)
         diffusion = np.zeros(self.layers)
         for i in range(self.layers-1):
@@ -198,8 +197,31 @@ class RadialDroplet(Droplet):
     def mass_solvent(self) -> float:
         return self.total_mass_solvent
 
+    def linear_layer_concentrations(self):
+        rs = np.concatenate((self.cell_boundaries,[self.radius]))
+        r0s = rs[:-1]
+        r1s = rs[1:]
+        r03s = r0s**3
+        r04s = r0s**4
+        r13s = r1s**3
+        r14s = r1s**4
+        masses = self.layer_mass_solute
+        c0 = 3*masses[0]/(4*np.pi*r03s[0])
+        c = [c0,c0]
+
+        for r03,r04,r13,r14,mass,r0,r1 in zip(r03s,r04s,r13s,r14s,masses[1:],r0s,r1s):
+            numerator = mass/np.pi+4/3*c[-1]*(r03-r13)
+            denominator = r14-r04+4/3*r0*(r03-r13)
+            gradient = numerator/denominator
+            c.append(gradient*(r1-r0)+c[-1])
+
+        return c
+
+    def all_positions(self):
+        return np.concatenate(([0],self.cell_boundaries,[self.radius]))
+
     def surface_solvent_activity(self) -> float:
-        return self.solution.activity(self.solution.concentration_to_solute_mass_fraction(self.layer_concentration[-1]))
+        return self.solution.activity(self.solution.concentration_to_solute_mass_fraction(self.linear_layer_concentrations()[-1]))
 
     def virtual_droplet(self, x) -> Self:
         cell_boundaries, cell_velocities, layer_mass_solute, total_mass_solvent, temperature, velocity, position = self.split_state(x)
