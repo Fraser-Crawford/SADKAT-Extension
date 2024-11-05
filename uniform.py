@@ -57,7 +57,7 @@ class UniformDroplet(Droplet):
     def set_state(self, state:npt.NDArray[np.float_]):
         self.float_mass_solvent, self.temperature, self.velocity, self.position = state[0], state[1], state[2:5], state[5:]
 
-    def dxdt(self)->npt.NDArray[np.float_]:
+    def dxdt(self,time)->npt.NDArray[np.float_]:
         return np.hstack((self.dmdt(), self.dTdt(), self.dvdt(), self.drdt()))
 
     def mass_solute(self) -> float:

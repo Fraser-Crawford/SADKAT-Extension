@@ -1,5 +1,4 @@
-from fit import kelvin_effect, beta
-from radial import RadialDroplet
+from fit import beta
 from solution_definitions import aqueous_NaCl
 from suspension import Suspension
 from dataclasses import dataclass
@@ -31,9 +30,10 @@ class SuspensionDroplet(Droplet):
     def extra_results(self):
         return dict(
             layer_mass_particles=self.log_mass_particles[:],
-            layer_concentration=self.layer_concentration,
+            average_layer_concentrations=self.average_layer_concentrations,
             layer_boundaries=self.cell_boundaries,
             surface_volume_fraction=np.max(self.layer_volume_fraction()),
+            layer_concentrations=self.linear_layer_concentrations(),
             diffusion = self.solution.diffusion(self.temperature),
             peclet = self.peclet,
             predicted_enrichment = self.predicted_enrichment,
@@ -45,6 +45,7 @@ class SuspensionDroplet(Droplet):
             average_particle_volume_fraction = (self.mass_particles()/self.solution.particle_density)/self.volume,
             average_particle_concentration = (self.mass_particles()/self.solution.particle_mass)/self.volume,
             surface_particle_concentration = (self.layer_mass_particles[-1]/self.solution.particle_mass)/self.layer_volume[-1],
+            mass_particles = self.mass_particles(),
         )
 
     @property
@@ -96,6 +97,26 @@ class SuspensionDroplet(Droplet):
     def state(self) -> npt.NDArray[np.float_]:
         return np.hstack((self.cell_boundaries, self.cell_velocities, self.log_mass_particles, self.total_mass_solvent, self.temperature, self.velocity, self.position))
 
+    def linear_layer_concentrations(self):
+        rs = np.concatenate((self.cell_boundaries,[self.radius]))
+        r0s = rs[:-1]
+        r1s = rs[1:]
+        r03s = r0s**3
+        r04s = r0s**4
+        r13s = r1s**3
+        r14s = r1s**4
+        masses = self.layer_mass_particles
+        c0 = 3*masses[0]/(4*np.pi*r03s[0])
+        c = [c0,c0]
+
+        for r03,r04,r13,r14,mass,r0,r1 in zip(r03s,r04s,r13s,r14s,masses[1:],r0s,r1s):
+            numerator = mass/np.pi+4/3*c[-1]*(r03-r13)
+            denominator = r14-r04+4/3*r0*(r03-r13)
+            gradient = numerator/denominator
+            c.append(gradient*(r1-r0)+c[-1])
+
+        return c
+
     def split_state(self, state: npt.NDArray[np.float_]):
         cell_boundaries = state[:len(self.cell_boundaries)]
         cell_velocities = state[len(self.cell_boundaries):len(self.cell_velocities)+len(self.cell_boundaries)]
@@ -110,7 +131,7 @@ class SuspensionDroplet(Droplet):
     def set_state(self, state: npt.NDArray[np.float_]):
         self.cell_boundaries, self.cell_velocities, self.log_mass_particles, self.total_mass_solvent, self.temperature, self.velocity, self.position = self.split_state(state)
 
-    def dxdt(self) -> npt.NDArray[np.float_]:
+    def dxdt(self,time) -> npt.NDArray[np.float_]:
         return np.hstack((self.boundary_correction(),self.boundary_acceleration(),self.change_in_particles_mass(),self.dmdt(),self.dTdt(),self.dvdt(),self.drdt()))
 
     @property
@@ -129,7 +150,7 @@ class SuspensionDroplet(Droplet):
         return np.array([4 / 3 * np.pi * (r1 ** 3 - r0 ** 3) for r0, r1 in zip(true_boundaries, true_boundaries[1:])])
 
     @property
-    def layer_concentration(self):
+    def average_layer_concentrations(self):
         return self.layer_mass_particles/self.layer_volume
 
     @property
@@ -151,7 +172,7 @@ class SuspensionDroplet(Droplet):
     def redistribute(self):
         sign = np.sign(self.cell_velocities)
         volume_corrections = 4*np.pi*(self.cell_boundaries**2*self.cell_velocities)
-        concentrations = self.layer_concentration
+        concentrations = self.linear_layer_concentrations()[1:]
         result = np.zeros(self.layers)
 
         for i in range(len(volume_corrections)):
@@ -170,10 +191,11 @@ class SuspensionDroplet(Droplet):
     def layer_mass_particles(self):
         return np.exp(self.log_mass_particles)
 
-    def get_gradients(self,normalised_boundaries):
-        concentrations = self.layer_concentration
-        delta_rs = [r1-r0 for r0,r1 in zip(normalised_boundaries,normalised_boundaries[1:])]
-        return [(c1-c0)/delta_r for c0,c1,delta_r in zip(concentrations,concentrations[1:],delta_rs)]
+    def get_gradients(self, normalised_boundaries):
+        concentrations = self.linear_layer_concentrations()
+        return np.array([(c2 - c0) / (r2 - r0) for r0, r2, c0, c2 in
+                         zip(normalised_boundaries[:-2], normalised_boundaries[2:], concentrations[:-2],
+                             concentrations[2:])])
 
     def change_in_particles_mass(self):
         radius = self.radius
@@ -209,11 +231,11 @@ class SuspensionDroplet(Droplet):
     def mass_solute(self) -> float:
         return 0.0
 
-    def check_for_solidification(self,time,state):
-        return self.solution.critical_volume_fraction - np.max(self.virtual_droplet(state).layer_volume_fraction())
+    def check_for_solidification(self):
+        return self.solution.critical_volume_fraction - self.linear_layer_concentrations()[-1]/self.solution.particle_density
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
-        shell_formation = lambda time, x: self.virtual_droplet(x).check_for_solidification(time,x)
+        shell_formation = lambda time, x: self.virtual_droplet(x).check_for_solidification()
         shell_formation.terminal = True
         events.append(shell_formation)
         return solve_ivp(dxdt, time_range, self.state(), first_step=first_step, rtol=rtol, events=events, method="Radau")
@@ -225,6 +247,10 @@ class SuspensionDroplet(Droplet):
     @property
     def mass(self):
         return self.mass_solvent() + self.mass_particles()
+
+    @property
+    def surface_volume_fraction(self):
+        return self.linear_layer_concentrations()[-1] / self.solution.particle_density
 
     def layer_volume_fraction(self):
         volumes = self.layer_mass_particles/self.solution.particle_density

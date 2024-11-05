@@ -45,9 +45,9 @@ def peclet_bench():
     plt.legend()
     plt.show()
 
-def radial_bench():
+def radial_bench(layers):
     print("Starting radial benchmark")
-    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, 20)
+    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, layers)
     df = radial.complete_trajectory(radial.integrate(1))
     print("Integrated")
     positions = []
@@ -106,11 +106,11 @@ def silica_bench(droplet_radius,silica_volume_fraction):
         step = max_time / 20
         goal = step
         for i in range(len(df.time.values)):
-            concentrations.append(df.layer_concentration[i])
-            positions.append(df.layer_positions[i])
+            concentrations.append(df.layer_concentrations[i])
+            positions.append(df.all_positions[i])
             time = df.time.values[i]
             if time >= goal:
-                plt.plot(df.layer_positions[i], df.layer_concentration[i])
+                plt.plot(df.all_positions[i], df.layer_concentrations[i])
                 goal += step
         plt.title(f"{layer} layers, locking point time of {np.max(df.time):.2f} s, locking point radius of {np.min(df.radius)*1e6:.2f} um")
         plt.plot(positions[-1], concentrations[-1])
@@ -138,10 +138,27 @@ def linear_layer_concentrations():
     plt.scatter(radial.all_positions(),radial.linear_layer_concentrations())
     plt.show()
 
+def mass_conservation():
+    silica_suspension = silica(90e-9)
+    volume = 1
+    particle_volume = volume * 0.06e-2
+    solvent_volume = volume - particle_volume
+    mass_fraction = particle_volume * 2200 / (solvent_volume * 1000 + particle_volume * 2200)
+    layers = [2,3,4,5,6,7,8,9,10]
+    for layer in layers:
+        print(layer)
+        suspension = SuspensionDroplet.from_mfp(silica_suspension, Atmosphere(303), gravity, 25.6e-6,
+                                                mass_fraction, 303, layer)
+        df = suspension.complete_trajectory(suspension.integrate(2))
+        plt.plot(df.time,df.mass_particles)
+        print(np.mean(df.mass_particles))
+    plt.show()
+
 if __name__ == '__main__':
     #pure_bench(26.5e-6,303,0.1)
     silica_bench(26.5e-6,0.6e-2)
-    #radial_bench()
+    #radial_bench(100)
     #peclet_bench()
     #dummy_suspension_bench()
     #linear_layer_concentrations()
+    #mass_conservation()

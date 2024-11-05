@@ -33,7 +33,7 @@ class Droplet(ABC):
         pass
 
     @abstractmethod
-    def dxdt(self)->npt.NDArray[np.float_]:
+    def dxdt(self,time)->npt.NDArray[np.float_]:
         """The time derivative of the state of the droplet."""
         pass
 
@@ -385,7 +385,7 @@ class Droplet(ABC):
             efflorescing.terminal = True
             events += [efflorescing]
 
-        dxdt = lambda time, x: self.virtual_droplet(x).dxdt()
+        dxdt = lambda time, x: self.virtual_droplet(x).dxdt(time)
 
         trajectory = self.solver(dxdt,(0,t), first_step, rtol, events)
         return trajectory

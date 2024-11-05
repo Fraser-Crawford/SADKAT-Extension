@@ -120,7 +120,7 @@ class RadialDroplet(Droplet):
     def set_state(self, state: npt.NDArray[np.float_]):
         self.cell_boundaries, self.cell_velocities, self.log_mass_solute, self.total_mass_solvent, self.temperature, self.velocity, self.position = self.split_state(state)
 
-    def dxdt(self) -> npt.NDArray[np.float_]:
+    def dxdt(self,time) -> npt.NDArray[np.float_]:
         return np.hstack((self.boundary_correction(),self.boundary_acceleration(),self.change_in_solute_mass(),self.dmdt(),self.dTdt(),self.dvdt(),self.drdt()))
 
     @property
