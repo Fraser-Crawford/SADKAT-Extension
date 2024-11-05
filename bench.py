@@ -87,7 +87,7 @@ def dummy_suspension_bench():
     plt.show()
 
 def silica_bench(droplet_radius,silica_volume_fraction):
-    silica_suspension = silica(90e-9)
+    silica_suspension = silica(12e-9/2)
     volume = 1
     particle_volume = volume*silica_volume_fraction
     solvent_volume = volume-particle_volume
@@ -156,7 +156,7 @@ def mass_conservation():
 
 if __name__ == '__main__':
     #pure_bench(26.5e-6,303,0.1)
-    silica_bench(26.5e-6,0.6e-2)
+    silica_bench(26.5e-6,0.6/100)
     #radial_bench(100)
     #peclet_bench()
     #dummy_suspension_bench()

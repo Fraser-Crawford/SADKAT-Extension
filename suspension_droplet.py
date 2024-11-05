@@ -36,7 +36,7 @@ class SuspensionDroplet(Droplet):
             layer_boundaries=self.cell_boundaries,
             surface_volume_fraction=np.max(self.layer_volume_fraction()),
             layer_concentrations=self.linear_layer_concentrations(),
-            diffusion=self.solution.diffusion(self.temperature),
+            diffusion=self.diffusion_coefficient,
             peclet=self.peclet,
             predicted_enrichment=self.predicted_enrichment,
             real_enrichment=np.max(self.layer_volume_fraction()) / (
@@ -59,13 +59,20 @@ class SuspensionDroplet(Droplet):
         return np.exp(Pe / 2) / (3 * beta(Pe))
 
     @property
-    def diffusion(self):
-        return self.solution.diffusion(self.temperature)
+    def diffusion_coefficient(self):
+        return self.solution.diffusion(self.temperature)*self.particle_sherwood_number
+
+    @property
+    def particle_sherwood_number(self):
+        Sc = self.solution.viscosity(self.temperature)/(self.solution.solvent.density(self.temperature) * self.solution.diffusion(self.temperature))
+        Pe = self.peclet
+        Re = Pe/Sc
+        return 1 + 0.3*np.sqrt(Re)*np.cbrt(Sc)
 
     @property
     def peclet(self):
         return -self.dmdt() / (
-                self.diffusion * 4 * np.pi * self.radius * self.solution.solvent.density(self.temperature))
+                self.solution.diffusion(self.temperature) * 4 * np.pi * self.radius * self.solution.solvent.density(self.temperature))
 
     @property
     def layers(self):
@@ -122,7 +129,7 @@ class SuspensionDroplet(Droplet):
             gradient = numerator / denominator
             c.append(gradient * (r1 - r0) + c[-1])
 
-        return c
+        return np.array(c)
 
     def split_state(self, state: npt.NDArray[np.float_]):
         cell_boundaries = state[:len(self.cell_boundaries)]
@@ -178,6 +185,7 @@ class SuspensionDroplet(Droplet):
         NB: Should be zero for pure solvent."""
         return 0.0
 
+    @property
     def redistribute(self):
         sign = np.sign(self.cell_velocities)
         volume_corrections = 4 * np.pi * (self.cell_boundaries ** 2 * self.cell_velocities)
@@ -199,20 +207,25 @@ class SuspensionDroplet(Droplet):
     @property
     def settle(self):
         """
-        Due to the relatively massive nature of the nano-particles suspended, gravitational mixing
-        shouldn't be ignored. This scheme estimates the terminal velocity of the particles in the fluid
-        and fluxes them to the layer below. Note that this can cause concentration for very large
-        nano-particles and extra mixing for small particles.
+        In its current state, the overall effect is symmetrical meaning no extra mixing occurs.
+        A better representation would be a Hill vortex.
+
         """
         delta_rho = self.solution.particle_density - self.solution.solvent.density(self.temperature)
         terminal_velocity = (2 * 9.81 * self.solution.particle_radius ** 2 * delta_rho
                              / (9 * self.solution.viscosity(self.temperature)))
-        particle_mass = self.solution.particle_mass
         areas = 4 * np.pi * self.cell_boundaries ** 2
-        concentrations = self.linear_layer_concentrations()
-        top_half = terminal_velocity/particle_mass*concentrations[1:-1]*areas
-        bottom_half = terminal_velocity / particle_mass * concentrations[:-2] * areas
-        return  bottom_half-top_half
+        concentrations = self.linear_layer_concentrations()/2
+        top_half = terminal_velocity*concentrations[1:-1]*areas
+        bottom_half = terminal_velocity* concentrations[:-2] * areas
+        result = np.zeros(self.layers)
+        for i in range(self.layers-1):
+            result[i] += top_half[i]
+            result[i] -= bottom_half[i]
+            if i != self.layers-1:
+                result[i+1] -= top_half[i]
+                result[i+1] += bottom_half[i]
+        return result
 
     @property
     def layer_mass_particles(self):
@@ -223,11 +236,11 @@ class SuspensionDroplet(Droplet):
         return np.array([(c2 - c0) / (r2 - r0) for r0, r2, c0, c2 in
                          zip(normalised_boundaries[:-2], normalised_boundaries[2:], concentrations[:-2],
                              concentrations[2:])])
-
-    def change_in_particles_mass(self):
+    @property
+    def diffuse(self):
         radius = self.radius
         full_boundaries = np.concatenate(([0], self.cell_boundaries, [radius]))
-        diffusion_coefficient = self.solution.diffusion(self.temperature)
+        diffusion_coefficient = self.diffusion_coefficient
         normalised_boundaries = full_boundaries / radius
         gradients = self.get_gradients(normalised_boundaries)
         diffusion = np.zeros(self.layers)
@@ -235,7 +248,15 @@ class SuspensionDroplet(Droplet):
             value = 4 * np.pi * radius * diffusion_coefficient * gradients[i] * normalised_boundaries[i + 1] ** 2
             diffusion[i] += value
             diffusion[i + 1] -= value
-        return (self.redistribute() + diffusion + self.settle) / self.layer_mass_particles
+        return diffusion
+
+    def change_in_particles_mass(self):
+        return (self.redistribute + self.diffuse + self.settle) / self.layer_mass_particles
+
+    def compare_mass_change(self):
+        print(f"Diffusion: {100*self.diffuse/self.layer_mass_particles}")
+        print(f"Settle: {100*self.settle/self.layer_mass_particles}")
+        print()
 
     def mass_particles(self):
         return np.sum(self.layer_mass_particles)

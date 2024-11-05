@@ -20,6 +20,14 @@ class RadialDroplet(Droplet):
     def volume(self) -> float:
         return self.mass/self.density
 
+    @property
+    def solute_sherwood_number(self) -> float:
+        Sc = self.solution.viscosity(self.mass_fraction_solute,self.temperature) / (
+                    self.solution.solvent.density(self.temperature) * self.solution.diffusion(self.mass_fraction_solute,self.temperature))
+        Pe = self.peclet
+        Re = Pe / Sc
+        return 1 + 0.3 * np.sqrt(Re) * np.cbrt(Sc)
+
     def extra_results(self):
         return dict(
             layer_mass_solute=self.log_mass_solute[:],
