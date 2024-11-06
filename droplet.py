@@ -336,8 +336,8 @@ class Droplet(ABC):
         """Given the current state of the droplet and environment, find and return the equilibrium droplet"""
         mfs = np.linspace(1.0,0.0,100)
         activity = self.solution.activity(mfs)
-
         eq_mfs = np.interp(self.environment.relative_humidity,activity,mfs)
+
         mass_water = (1-eq_mfs)*self.mass_solute()/eq_mfs
 
         return self.convert(mass_water)
