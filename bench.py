@@ -87,7 +87,7 @@ def dummy_suspension_bench():
     plt.show()
 
 def silica_bench(droplet_radius,silica_volume_fraction):
-    silica_suspension = silica(180e-9/2)
+    silica_suspension = silica(12e-9/2)
     mass_fraction = silica_volume_fraction*2200/((1-silica_volume_fraction)*1000+silica_volume_fraction*2200)
     time_result = []
     layers = [2,3,4,5,10,20,30,40,50,60,70,80,90,100]

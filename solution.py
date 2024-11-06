@@ -50,3 +50,8 @@ class Solution:
             density_gradients = np.gradient(densities,mfs)
             self.density_derivative_coefficients = np.polyfit(mfs, density_gradients, 4)
         return np.poly1d(self.density_derivative_coefficients)(mfs)
+
+    def mass_fraction_from_activity(self, activity):
+        mfs = np.linspace(1.0, 0.0, 100)
+        mfs_activity = self.activity(mfs)
+        return np.interp(activity, mfs_activity, mfs)

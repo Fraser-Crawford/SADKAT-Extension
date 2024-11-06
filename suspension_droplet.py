@@ -60,7 +60,7 @@ class SuspensionDroplet(Droplet):
 
     @property
     def diffusion_coefficient(self):
-        return self.solution.diffusion(self.temperature)*self.particle_sherwood_number
+        return self.solution.diffusion(self.temperature) #*self.particle_sherwood_number
 
     @property
     def particle_sherwood_number(self):
