@@ -170,6 +170,24 @@ class RadialDroplet(Droplet):
         return result
 
     @property
+    def circulate(self):
+        R = self.cell_boundaries / self.radius
+        viscosity_ratio = self.solution.viscosity(self.layer_mass_fraction_solute,self.temperature) / self.environment.dynamic_viscosity
+        convection_speed = self.relative_speed * (1 - R ** 2) / (8 * (1 + viscosity_ratio))
+        areas = 2 * np.pi * self.cell_boundaries ** 2
+        concentrations = self.linear_layer_concentrations()
+        top_half = convection_speed * concentrations[1:-1] * areas
+        bottom_half = convection_speed * concentrations[:-2] * areas
+        result = np.zeros(self.layers)
+        for i in range(self.layers - 1):
+            result[i] += top_half[i]
+            result[i] -= bottom_half[i]
+            if i != self.layers - 1:
+                result[i + 1] -= top_half[i]
+                result[i + 1] += bottom_half[i]
+        return result
+
+    @property
     def layer_density(self):
         return self.solution.concentration_to_solute_mass_fraction(self.average_layer_concentration)
 
