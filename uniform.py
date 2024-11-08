@@ -6,8 +6,6 @@ from typing_extensions import Self
 import numpy as np
 from numpy import typing as npt
 from droplet import Droplet
-from environment import Environment
-from solution import Solution
 
 
 @dataclass
@@ -24,7 +22,7 @@ class UniformDroplet(Droplet):
     float_mass_solute: float
 
     def convert(self, mass_water):
-        return UniformDroplet(self.solution, self.environment, self.gravity, self.environment.temperature, self.velocity,
+        return UniformDroplet(self.solution, self.environment, self.gravity, self.stationary,self.environment.temperature, self.velocity,
                        self.position, mass_water, self.mass_solute())
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
@@ -33,7 +31,7 @@ class UniformDroplet(Droplet):
     @staticmethod
     def from_mfs(solution, environment, gravity,
                  radius, mass_fraction_solute, temperature,
-                 velocity=np.zeros(3), position=np.zeros(3)):
+                 velocity=np.zeros(3), position=np.zeros(3), stationary=True):
         """Create a droplet from experimental conditions.
 
         Args:
@@ -49,7 +47,7 @@ class UniformDroplet(Droplet):
         mass = 4 * np.pi / 3 * radius ** 3 * solution.density(mass_fraction_solute)
         mass_solvent = (1 - mass_fraction_solute) * mass
         mass_solute = mass_fraction_solute * mass
-        return UniformDroplet(solution, environment,gravity,temperature,velocity,position,mass_solvent,mass_solute)
+        return UniformDroplet(solution, environment,gravity,stationary,temperature,velocity,position,mass_solvent,mass_solute)
 
     def state(self) -> npt.NDArray:
         return np.hstack((self.float_mass_solvent, self.temperature, self.velocity, self.position))
@@ -71,4 +69,4 @@ class UniformDroplet(Droplet):
 
     def virtual_droplet(self, x) -> Self:
         x = (x[0], x[1], x[2:5], x[5:])
-        return UniformDroplet(self.solution, self.environment, self.gravity, x[1], x[2], x[3], x[0], self.float_mass_solute)
+        return UniformDroplet(self.solution, self.environment, self.gravity, self.stationary,x[1], x[2], x[3], x[0], self.float_mass_solute)

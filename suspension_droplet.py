@@ -81,7 +81,7 @@ class SuspensionDroplet(Droplet):
     @staticmethod
     def from_mfp(solution: Suspension, environment, gravity,
                  radius, mass_fraction_particles, temperature, layers=10,
-                 velocity=np.zeros(3), position=np.zeros(3)):
+                 velocity=np.zeros(3), position=np.zeros(3),stationary=True):
         """Create a droplet from experimental conditions.
 
         Args:
@@ -104,7 +104,7 @@ class SuspensionDroplet(Droplet):
         log_mass_solute = np.log(np.array([4 / 3 * np.pi * (r1 ** 3 - r0 ** 3) * concentration for r0, r1 in
                                            zip(real_boundaries, real_boundaries[1:])]))
         cell_velocities = np.zeros(len(cell_boundaries))
-        return SuspensionDroplet(solution, environment, gravity, temperature, velocity, position, mass_solvent,
+        return SuspensionDroplet(solution, environment, gravity, stationary, temperature, velocity, position, mass_solvent,
                                  cell_boundaries, cell_velocities, log_mass_solute)
 
     def state(self) -> npt.NDArray[np.float_]:
@@ -270,11 +270,11 @@ class SuspensionDroplet(Droplet):
     def virtual_droplet(self, x) -> Self:
         cell_boundaries, cell_velocities, layer_mass_particles, total_mass_solvent, temperature, velocity, position = self.split_state(
             x)
-        return SuspensionDroplet(self.solution, self.environment, self.gravity, temperature, velocity, position,
+        return SuspensionDroplet(self.solution, self.environment, self.gravity,self.stationary, temperature, velocity, position,
                                  total_mass_solvent, cell_boundaries, cell_velocities, layer_mass_particles)
 
     def convert(self, mass_solvent):
-        return UniformDroplet(aqueous_NaCl, self.environment, self.gravity, self.environment.temperature, self.velocity,
+        return UniformDroplet(aqueous_NaCl, self.environment, self.gravity,self.stationary, self.environment.temperature, self.velocity,
                               self.position, mass_solvent, 0.0)
 
     def mass_solute(self) -> float:

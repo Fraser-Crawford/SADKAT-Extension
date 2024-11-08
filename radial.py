@@ -87,7 +87,7 @@ class RadialDroplet(Droplet):
     @staticmethod
     def from_mfs(solution, environment, gravity,
                  radius, mass_fraction_solute, temperature, layers=10,
-                 velocity=np.zeros(3), position=np.zeros(3)):
+                 velocity=np.zeros(3), position=np.zeros(3),stationary=True):
         """Create a droplet from experimental conditions.
 
         Args:
@@ -99,6 +99,7 @@ class RadialDroplet(Droplet):
             temperature: in K
             velocity: in metres/second (3-dimensional vector)
             position: in metres (3-dimensional vector)
+            stationary: bool
         """
         volume = 4 * np.pi / 3 * radius ** 3
         mass = volume * solution.density(mass_fraction_solute)
@@ -109,7 +110,7 @@ class RadialDroplet(Droplet):
         real_boundaries = np.concatenate(([0],cell_boundaries,[radius]))
         log_mass_solute = np.log(np.array([4/3*np.pi*(r1**3-r0**3)*concentration for r0,r1 in zip(real_boundaries,real_boundaries[1:])]))
         cell_velocities = np.zeros(len(cell_boundaries))
-        return RadialDroplet(solution,environment,gravity,temperature,velocity,position,mass_solvent,cell_boundaries,cell_velocities,log_mass_solute)
+        return RadialDroplet(solution,environment,gravity,stationary,temperature,velocity,position,mass_solvent,cell_boundaries,cell_velocities,log_mass_solute)
 
     def state(self) -> npt.NDArray[np.float_]:
         return np.hstack((self.cell_boundaries, self.cell_velocities, self.log_mass_solute, self.total_mass_solvent, self.temperature, self.velocity, self.position))
@@ -233,10 +234,10 @@ class RadialDroplet(Droplet):
 
     def virtual_droplet(self, x) -> Self:
         cell_boundaries, cell_velocities, layer_mass_solute, total_mass_solvent, temperature, velocity, position = self.split_state(x)
-        return RadialDroplet(self.solution,self.environment,self.gravity,temperature,velocity,position,total_mass_solvent,cell_boundaries,cell_velocities,layer_mass_solute)
+        return RadialDroplet(self.solution,self.environment,self.gravity,self.stationary,temperature,velocity,position,total_mass_solvent,cell_boundaries,cell_velocities,layer_mass_solute)
 
     def convert(self, mass_solvent):
-        return UniformDroplet(self.solution, self.environment, self.gravity, self.environment.temperature, self.velocity,
+        return UniformDroplet(self.solution, self.environment, self.gravity,self.stationary, self.environment.temperature, self.velocity,
                        self.position, mass_solvent, self.mass_solute())
 
     def solver(self, dxdt, time_range, first_step, rtol, events):

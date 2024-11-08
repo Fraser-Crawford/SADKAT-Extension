@@ -18,6 +18,7 @@ class Droplet(ABC):
     solution: Solution | ViscousSolution
     environment: Environment
     gravity: np.array  # m/s^2
+    stationary: bool
     temperature: float  # K
     velocity: np.array
     position: np.array
@@ -93,20 +94,6 @@ class Droplet(ABC):
         """Returns the mass of solvent in the droplet in kg."""
         pass
 
-    @property
-    def refractive_index(self)->float:
-        """Returns the refractive index of the droplet based on a mass fraction/density correction."""
-        solutionD = self.density
-        soluteD = self.solution.solid_density
-        soluteRI = self.solution.solid_refractive_index
-        solventD = self.solution.solvent.density(self.temperature)
-        solventRI = self.solution.solvent.refractive_index
-        mfs = self.mass_fraction_solute
-        return np.sqrt((1 + 2 * solutionD * (((soluteRI ** 2 - 1) * mfs) / ((soluteRI ** 2 + 2) * soluteD) + (
-                    (1 - mfs) * (solventRI ** 2 - 1)) / (solventD * (solventRI ** 2 + 2)))) / (1 - solutionD * (
-                    ((soluteRI ** 2 - 1) * mfs) / ((soluteRI ** 2 + 2) * soluteD) + (
-                        (1 - mfs) * (solventRI ** 2 - 1)) / (solventD * (solventRI ** 2 + 2)))))
-
     def copy(self):
         """Create an identical copy of this droplet."""
         return self.virtual_droplet(self.state().copy())
@@ -132,7 +119,7 @@ class Droplet(ABC):
                     concentration=self.concentration,
                     density=self.density,
                     radius=self.radius,
-                    refractive_index=self.refractive_index,
+                    refractive_index=self.solution.refractive_index(self.mass_fraction_solute,self.temperature),
                     vapour_pressure=self.vapour_pressure,
                     temperature=self.temperature,
                     drag_coefficient=self.drag_coefficient,
@@ -251,7 +238,7 @@ class Droplet(ABC):
     @property
     def reynolds_number(self):
         """Non-dimensional number describing the type of fluid flow."""
-        return self.environment.density * self.diameter * self.speed / self.environment.dynamic_viscosity
+        return self.environment.density * self.diameter * self.relative_speed / self.environment.dynamic_viscosity
 
     @property
     def schmidt_number(self):
@@ -306,6 +293,8 @@ class Droplet(ABC):
 
     def dvdt(self):
         """Time derivative of velocity, i.e. its acceleration from Newton's second law in m/s^2."""
+        if self.stationary:
+            return np.zeros(3)
         rho_p = self.density
         rho_g = self.environment.density
         g = self.gravity
@@ -321,6 +310,8 @@ class Droplet(ABC):
 
     def drdt(self):
         """Time derivative of droplet position, i.e. its velocity in m/s."""
+        if self.stationary:
+            return np.zeros(3)
         return self.velocity
 
     @abstractmethod

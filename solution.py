@@ -55,3 +55,15 @@ class Solution:
         mfs = np.linspace(1.0, 0.0, 100)
         mfs_activity = self.activity(mfs)
         return np.interp(activity, mfs_activity, mfs)
+
+    def refractive_index(self, mfs, temperature) -> float:
+        """Returns the refractive index of the droplet based on a mass fraction/density correction."""
+        solutionD = self.density(mfs)
+        soluteD = self.solid_density
+        soluteRI = self.solid_refractive_index
+        solventD = self.solvent.density(temperature)
+        solventRI = self.solvent.refractive_index
+        return np.sqrt((1 + 2 * solutionD * (((soluteRI ** 2 - 1) * mfs) / ((soluteRI ** 2 + 2) * soluteD) + (
+                (1 - mfs) * (solventRI ** 2 - 1)) / (solventD * (solventRI ** 2 + 2)))) / (1 - solutionD * (
+                ((soluteRI ** 2 - 1) * mfs) / ((soluteRI ** 2 + 2) * soluteD) + (
+                (1 - mfs) * (solventRI ** 2 - 1)) / (solventD * (solventRI ** 2 + 2)))))

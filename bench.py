@@ -153,9 +153,12 @@ def mass_conservation():
 
 if __name__ == '__main__':
     #pure_bench(26.5e-6,303,0.1)
-    silica_bench(26.5e-6,0.6/100)
+    #silica_bench(26.5e-6,0.6/100)
     #radial_bench(100)
     #peclet_bench()
     #dummy_suspension_bench()
     #linear_layer_concentrations()
     #mass_conservation()
+    mfs = aqueous_NaCl.mass_fraction_from_activity(0.47)
+    concentration = aqueous_NaCl.concentration(mfs)
+    print(concentration)
