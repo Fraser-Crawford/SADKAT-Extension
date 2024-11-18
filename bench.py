@@ -87,13 +87,13 @@ def dummy_suspension_bench():
     plt.show()
 
 def silica_bench(droplet_radius,silica_volume_fraction):
-    silica_suspension = silica(12e-9/2)
+    silica_suspension = silica(180e-9/2)
     mass_fraction = silica_volume_fraction*2200/((1-silica_volume_fraction)*1000+silica_volume_fraction*2200)
     time_result = []
     layers = [2,3,4,5,10,20,30,40,50,60,70,80,90,100]
     for layer in layers:
         print(layer)
-        suspension = SuspensionDroplet.from_mfp(silica_suspension,Atmosphere(303),gravity,droplet_radius,mass_fraction,303,layer)
+        suspension = SuspensionDroplet.from_mfp(silica_suspension,Atmosphere(303,velocity=np.array([0.02,0,0])),gravity,droplet_radius,mass_fraction,303,layer)
         df = suspension.complete_trajectory(suspension.integrate(2))
         print(np.max(df.time),np.min(df.radius))
         print()
@@ -153,12 +153,12 @@ def mass_conservation():
 
 if __name__ == '__main__':
     #pure_bench(26.5e-6,303,0.1)
-    #silica_bench(26.5e-6,0.6/100)
+    silica_bench(26.5e-6,0.6/100)
     #radial_bench(100)
     #peclet_bench()
     #dummy_suspension_bench()
     #linear_layer_concentrations()
     #mass_conservation()
-    mfs = aqueous_NaCl.mass_fraction_from_activity(0.47)
-    concentration = aqueous_NaCl.concentration(mfs)
-    print(concentration)
+    #mfs = aqueous_NaCl.mass_fraction_from_activity(0.47)
+    #concentration = aqueous_NaCl.concentration(mfs)
+    #print(concentration)

@@ -1,3 +1,5 @@
+from panel.layout.float import POSITIONS
+
 from fit import beta
 from solution_definitions import aqueous_NaCl
 from suspension import Suspension
@@ -14,6 +16,24 @@ layer_inertia = 1
 stiffness = 100
 damping = 2.0 * np.sqrt(stiffness * layer_inertia)
 
+def reverse_planck(x,a,b,c,d):
+    X = x-1
+    return a*(-X)**b/(np.exp(-c*X)-1) + d*X**2
+
+def crossing_rate(normalised_boundaries:npt.NDArray[np.float_],radius:float)->npt.NDArray[np.float_]:
+    a_poly = np.poly1d([ 2.19783107e-04, -3.51635586e-02,  2.38920835e+00, -8.93283977e+01,
+  1.98888346e+03, -2.66112346e+04,  2.05816461e+05, -8.23708581e+05,
+  1.31175102e+06])
+    b_poly = np.poly1d([ 2.53448443e-09, -3.85291781e-07,  2.47342925e-05, -8.69224399e-04,
+  1.81006090e-02, -2.25349160e-01,  1.60144207e+00, -5.63447673e+00,
+  1.01377002e+01])
+    c_poly = np.poly1d([ 1.05469823e-08, -1.56729633e-06, 9.80793232e-05, -3.34821449e-03,
+  6.74374840e-02, -8.08136859e-01,  5.51197720e+00, -1.88149952e+01,
+  3.49201721e+01])
+    d_poly = np.poly1d([ 4.02218255e-09, -5.59484149e-07,  3.25011115e-05, -1.02161469e-03,
+  1.88471472e-02, -2.07924035e-01,  1.35272436e+00, -5.00837063e+00,
+  1.01290991e+01])
+    return reverse_planck(normalised_boundaries, a_poly(radius*1e6), b_poly(radius*1e6), c_poly(radius*1e6), d_poly(radius*1e6))/2
 
 @dataclass
 class SuspensionDroplet(Droplet):
@@ -205,46 +225,21 @@ class SuspensionDroplet(Droplet):
         return result
 
     @property
-    def settle(self):
-        """
-        In its current state, the overall effect is symmetrical meaning no extra mixing occurs.
-        A better representation would be a Hill vortex.
-
-        """
-        delta_rho = self.solution.particle_density - self.solution.solvent.density(self.temperature)
-        terminal_velocity = (2 * 9.81 * self.solution.particle_radius ** 2 * delta_rho
-                             / (9 * self.solution.viscosity(self.temperature)))
-
-        areas = 4 * np.pi * self.cell_boundaries ** 2
-        concentrations = self.linear_layer_concentrations()/2
-        top_half = terminal_velocity*concentrations[1:-1]*areas
-        bottom_half = terminal_velocity* concentrations[:-2] * areas
-        result = np.zeros(self.layers)
-
-        for i in range(self.layers-1):
-            result[i] += top_half[i]
-            result[i] -= bottom_half[i]
-            if i != self.layers-1:
-                result[i+1] -= top_half[i]
-                result[i+1] += bottom_half[i]
-        return result
-
-    @property
     def circulate(self):
-        R = self.cell_boundaries/self.radius
+        radius = self.radius
+        R = self.cell_boundaries/radius
         viscosity_ratio = self.solution.viscosity(self.temperature)/self.environment.dynamic_viscosity
-        convection_speed = self.relative_speed*(1-R**2)/(8*(1+viscosity_ratio))
-        areas = 2 * np.pi * self.cell_boundaries ** 2
-        concentrations = self.linear_layer_concentrations()
-        top_half = convection_speed * concentrations[1:-1] * areas
-        bottom_half = convection_speed * concentrations[:-2] * areas
+        U = self.relative_speed
+        crossing_rates = crossing_rate(R,radius)*(U/0.02)*(1+viscosity_ratio)/(1+1e-3/1.81e-5)
         result = np.zeros(self.layers)
-        for i in range(self.layers-1):
-            result[i] += top_half[i]
-            result[i] -= bottom_half[i]
-            if i != self.layers-1:
-                result[i+1] -= top_half[i]
-                result[i+1] += bottom_half[i]
+        for index,particle_mass,rate in enumerate(zip(self.layer_mass_particles,crossing_rates)):
+            value = rate*particle_mass
+            result[index] -= value
+            result[index + 1] += value
+        for index,particle_mass,rate in enumerate(zip(self.layer_mass_particles[1:],crossing_rates)):
+            value = rate*particle_mass
+            result[index] += value
+            result[index + 1] -= value
         return result
 
     @property
@@ -271,12 +266,7 @@ class SuspensionDroplet(Droplet):
         return diffusion
 
     def change_in_particles_mass(self):
-        return (self.redistribute + self.diffuse + self.settle) / self.layer_mass_particles
-
-    def compare_mass_change(self):
-        print(f"Diffusion: {100*self.diffuse/self.layer_mass_particles}")
-        print(f"Settle: {100*self.settle/self.layer_mass_particles}")
-        print()
+        return (self.redistribute + self.diffuse) / self.layer_mass_particles
 
     def mass_particles(self):
         return np.sum(self.layer_mass_particles)

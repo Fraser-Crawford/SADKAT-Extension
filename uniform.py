@@ -11,6 +11,9 @@ from droplet import Droplet
 @dataclass
 class UniformDroplet(Droplet):
 
+    def refractive_index(self):
+        return self.solution.refractive_index(self.mass_fraction_solute,self.temperature)
+
     @property
     def volume(self) -> float:
         return self.mass/self.density

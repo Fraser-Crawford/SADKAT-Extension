@@ -119,7 +119,7 @@ class Droplet(ABC):
                     concentration=self.concentration,
                     density=self.density,
                     radius=self.radius,
-                    refractive_index=self.solution.refractive_index(self.mass_fraction_solute,self.temperature),
+                    refractive_index=self.refractive_index,
                     vapour_pressure=self.vapour_pressure,
                     temperature=self.temperature,
                     drag_coefficient=self.drag_coefficient,
@@ -144,7 +144,9 @@ class Droplet(ABC):
     @abstractmethod
     def extra_results(self):
         pass
-
+    @abstractmethod
+    def refractive_index(self):
+        pass
     @property
     def mass(self):
         """Total mass of droplet (both solvent and solute components) in kg."""
