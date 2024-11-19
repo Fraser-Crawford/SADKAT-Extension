@@ -1,5 +1,3 @@
-from panel.layout.float import POSITIONS
-
 from fit import beta
 from solution_definitions import aqueous_NaCl
 from suspension import Suspension
@@ -212,34 +210,34 @@ class SuspensionDroplet(Droplet):
         concentrations = self.linear_layer_concentrations()[1:]
         result = np.zeros(self.layers)
 
+        fullness = np.clip(concentrations[1:] - self.solution.particle_density, a_min=0, a_max=None)
+
         for i in range(len(volume_corrections)):
             if sign[i] < 0:
-                value = volume_corrections[i] * concentrations[i]
+                value = volume_corrections[i] * (concentrations[i] + fullness[i])
                 result[i] += value
                 result[i + 1] -= value
             else:
-                value = volume_corrections[i] * concentrations[i + 1]
+                value = volume_corrections[i] * (concentrations[i + 1] + fullness[i])
                 result[i] += value
                 result[i + 1] -= value
 
         return result
+    @property
+    def corrected_crossing_rate(self):
+        radius = self.radius
+        R = self.cell_boundaries / radius
+        viscosity_ratio = self.solution.viscosity(self.temperature) / self.environment.dynamic_viscosity
+        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (1 + viscosity_ratio)
 
     @property
     def circulate(self):
-        radius = self.radius
-        R = self.cell_boundaries/radius
-        viscosity_ratio = self.solution.viscosity(self.temperature)/self.environment.dynamic_viscosity
-        U = self.relative_speed
-        crossing_rates = crossing_rate(R,radius)*(U/0.02)*(1+viscosity_ratio)/(1+1e-3/1.81e-5)
+        crossing_rates = self.corrected_crossing_rate
         result = np.zeros(self.layers)
-        for index,particle_mass,rate in enumerate(zip(self.layer_mass_particles,crossing_rates)):
-            value = rate*particle_mass
+        for index,(m0,m1,rate) in enumerate(zip(self.layer_mass_particles,self.layer_mass_particles[1:],crossing_rates)):
+            value = rate*(m0-m1)
             result[index] -= value
             result[index + 1] += value
-        for index,particle_mass,rate in enumerate(zip(self.layer_mass_particles[1:],crossing_rates)):
-            value = rate*particle_mass
-            result[index] += value
-            result[index + 1] -= value
         return result
 
     @property
@@ -265,8 +263,10 @@ class SuspensionDroplet(Droplet):
             diffusion[i + 1] -= value
         return diffusion
 
+
+
     def change_in_particles_mass(self):
-        return (self.redistribute + self.diffuse) / self.layer_mass_particles
+        return (self.redistribute + self.diffuse + self.circulate) / self.layer_mass_particles
 
     def mass_particles(self):
         return np.sum(self.layer_mass_particles)
@@ -291,8 +291,16 @@ class SuspensionDroplet(Droplet):
         return 0.0
 
     def check_for_solidification(self):
-        return self.solution.critical_volume_fraction - self.linear_layer_concentrations()[
-            -1] / self.solution.particle_density
+        return self.solution.critical_volume_fraction -  self.probe_concentration/self.solution.particle_density
+
+    @property
+    def probe_concentration(self):
+        linear_concentrations = self.linear_layer_concentrations()
+        radial_position = self.radius - 4 * self.solution.particle_radius
+        positions = np.concatenate(([0], self.cell_boundaries, [self.radius]))
+        outer_index = np.max([np.argmax(positions>=radial_position),1])
+        m = (linear_concentrations[outer_index] - linear_concentrations[outer_index-1]) / (positions[outer_index] - positions[outer_index-1])
+        return linear_concentrations[outer_index] + (radial_position-positions[outer_index]) * m
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
         shell_formation = lambda time, x: self.virtual_droplet(x).check_for_solidification()
@@ -308,10 +316,6 @@ class SuspensionDroplet(Droplet):
     @property
     def mass(self):
         return self.mass_solvent() + self.mass_particles()
-
-    @property
-    def surface_volume_fraction(self):
-        return self.linear_layer_concentrations()[-1] / self.solution.particle_density
 
     def layer_volume_fraction(self):
         volumes = self.layer_mass_particles / self.solution.particle_density

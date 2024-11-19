@@ -2,7 +2,7 @@ from environment import Atmosphere
 from radial import RadialDroplet
 from solution_definitions import aqueous_NaCl
 from suspension import test_suspension, silica
-from suspension_droplet import SuspensionDroplet
+from suspension_droplet import SuspensionDroplet, crossing_rate
 from uniform import UniformDroplet
 from viscous_defintions import viscous_aqueous_NaCl
 import matplotlib.pyplot as plt
@@ -90,7 +90,7 @@ def silica_bench(droplet_radius,silica_volume_fraction):
     silica_suspension = silica(180e-9/2)
     mass_fraction = silica_volume_fraction*2200/((1-silica_volume_fraction)*1000+silica_volume_fraction*2200)
     time_result = []
-    layers = [2,3,4,5,10,20,30,40,50,60,70,80,90,100]
+    layers = [20,30,40,50,60,70,80,90,100]
     for layer in layers:
         print(layer)
         suspension = SuspensionDroplet.from_mfp(silica_suspension,Atmosphere(303,velocity=np.array([0.02,0,0])),gravity,droplet_radius,mass_fraction,303,layer)
