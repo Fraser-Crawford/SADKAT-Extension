@@ -212,6 +212,9 @@ def wet_bulb_bench():
     plt.xlabel("Relative Humidity")
     plt.ylabel("Reynolds Number")
     plt.show()
+    df = droplet.complete_trajectory(droplet.integrate(2.0))
+    plt.plot(df.time,df.sherwood_number)
+    plt.show()
 
 def poly2d(rh, v, c):
     return c[0] * rh ** 2 * v ** 2 + c[1] * rh * v ** 2 + c[2] * v ** 2 + c[3] * rh ** 2 * v + c[4] * rh * v + c[5] * v + c[6] * rh ** 2 + c[7] * rh + (rh * 0 + c[6])
@@ -245,9 +248,9 @@ def polymer_samples(particle_diameter,droplet_radius,rh,temperature,volume_fract
 
 
 if __name__ == '__main__':
-    #wet_bulb_bench()
+    wet_bulb_bench()
     #print(pure_water_probe(0.1,0.0,273.15+17.9))
-    polymer_samples(73.7e-9,23.8e-6,0.489,273.15+18,1.0e-2)
+    #polymer_samples(73.7e-9,23.8e-6,0.489,273.15+18,1.0e-2)
     # wet_bulb_bench(0.05,0.0,273.15+17.9)
     # pure_bench(26.5e-6,303,0.1)
     # silica_bench(28.75e-6,0.5/100)

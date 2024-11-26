@@ -32,12 +32,6 @@ class UniformDroplet(Droplet):
     def solver(self, dxdt, time_range, first_step, rtol, events):
         return solve_ivp(dxdt, time_range, self.state(), first_step=first_step, rtol=rtol, events=events)
 
-    @property
-    def wet_bulb_temperature(self):
-        T = self.temperature - 273.15
-        rh = self.environment.relative_humidity*100
-        return T*np.arctan(0.151977*np.sqrt(rh+8.313659))+0.00391838*np.sqrt(rh**3)*np.arctan(0.023101*rh)-np.arctan(rh-1.676331)+np.arctan(T+rh)-4.686035+273.15
-
     @staticmethod
     def from_mfs(solution, environment, gravity,
                  radius, mass_fraction_solute, temperature,

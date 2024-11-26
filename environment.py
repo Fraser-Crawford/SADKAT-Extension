@@ -37,6 +37,13 @@ class Environment:
         """Calculate mean free path via hard sphere approximation."""
         return self.dynamic_viscosity / self.density * np.sqrt(np.pi * 1e-3*self.molar_mass / (2*gas_constant * self.temperature))
 
+    @property
+    def wet_bulb_temperature(self):
+        T = self.temperature - 273.15
+        rh = self.relative_humidity * 100
+        return T * np.arctan(0.151977 * np.sqrt(rh + 8.313659)) + 0.00391838 * np.sqrt(rh ** 3) * np.arctan(
+            0.023101 * rh) - np.arctan(rh - 1.676331) + np.arctan(T + rh) - 4.686035 + 273.15
+
 molar_mass_air = chemicals.air.lemmon2000_air_MW # g/mol
 molar_density_air = lambda T: chemicals.air.lemmon2000_rho(T, 101325) # mol / m^3
 density_air = lambda T: 1e-3*molar_mass_air * molar_density_air(T) # kg/m^3
