@@ -170,6 +170,24 @@ class RadialDroplet(Droplet):
         return result
 
     @property
+    def circulate(self):
+        R = self.cell_boundaries / self.radius
+        viscosity_ratio = self.solution.viscosity(self.layer_mass_fraction_solute,self.temperature) / self.environment.dynamic_viscosity
+        convection_speed = self.relative_speed * (1 - R ** 2) / (8 * (1 + viscosity_ratio))
+        areas = 2 * np.pi * self.cell_boundaries ** 2
+        concentrations = self.linear_layer_concentrations()
+        top_half = convection_speed * concentrations[1:-1] * areas
+        bottom_half = convection_speed * concentrations[:-2] * areas
+        result = np.zeros(self.layers)
+        for i in range(self.layers - 1):
+            result[i] += top_half[i]
+            result[i] -= bottom_half[i]
+            if i != self.layers - 1:
+                result[i + 1] -= top_half[i]
+                result[i + 1] += bottom_half[i]
+        return result
+
+    @property
     def layer_density(self):
         return self.solution.concentration_to_solute_mass_fraction(self.average_layer_concentration)
 
@@ -186,19 +204,23 @@ class RadialDroplet(Droplet):
         concentrations = self.linear_layer_concentrations()
         return np.array([(c2-c0)/(r2-r0) for r0,r2,c0,c2 in zip(normalised_boundaries[:-2],normalised_boundaries[2:],concentrations[:-2],concentrations[2:])])
 
+    def refractive_index(self):
+        return self.solution.refractive_index(self.mass_fraction_solute,self.temperature)
+
     def change_in_solute_mass(self):
         radius = self.radius
-        result = self.redistribute()
+        redistribute = self.redistribute()
         layer_diffusion= self.solution.diffusion(self.layer_mass_fraction_solute,self.temperature)
         average_diffusion = [(d1+d2)/2 for d1,d2 in zip(layer_diffusion,layer_diffusion[1:])]
         normalised_boundaries = self.all_positions()/radius
         gradients = self.get_gradients(normalised_boundaries)
         diffusion = np.zeros(self.layers)
+        circulation = self.circulate
         for i in range(self.layers-1):
             value = 4*np.pi*radius*average_diffusion[i]*gradients[i]*normalised_boundaries[i+1]**2
             diffusion[i] += value
             diffusion[i+1] -= value
-        return (result + diffusion)/self.layer_mass_solute
+        return (redistribute + diffusion + circulation)/self.layer_mass_solute
 
     def mass_solute(self):
         return np.sum(self.layer_mass_solute)

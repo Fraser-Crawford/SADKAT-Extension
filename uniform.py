@@ -1,15 +1,19 @@
 from dataclasses import dataclass
 
+from fluids.constants import gas_constant
 from scipy.integrate import solve_ivp
+import scipy
 from typing_extensions import Self
 
 import numpy as np
 from numpy import typing as npt
 from droplet import Droplet
 
-
 @dataclass
 class UniformDroplet(Droplet):
+
+    def refractive_index(self):
+        return self.solution.refractive_index(self.mass_fraction_solute,self.temperature)
 
     @property
     def volume(self) -> float:
@@ -27,6 +31,12 @@ class UniformDroplet(Droplet):
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
         return solve_ivp(dxdt, time_range, self.state(), first_step=first_step, rtol=rtol, events=events)
+
+    @property
+    def wet_bulb_temperature(self):
+        T = self.temperature - 273.15
+        rh = self.environment.relative_humidity*100
+        return T*np.arctan(0.151977*np.sqrt(rh+8.313659))+0.00391838*np.sqrt(rh**3)*np.arctan(0.023101*rh)-np.arctan(rh-1.676331)+np.arctan(T+rh)-4.686035+273.15
 
     @staticmethod
     def from_mfs(solution, environment, gravity,

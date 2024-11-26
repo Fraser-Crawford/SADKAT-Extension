@@ -31,3 +31,8 @@ def silica(radius):
     heat_cap = lambda T, mfp: water.specific_heat_capacity(T)*(1-mfp)+mfp*703 #wikipedia
     viscosity = lambda T: -1.748e-5 * (T - 273) + 1.336e-3
     return Suspension(water, heat_cap, np.pi / 6, viscosity, radius, 2200) #From wicker chem source
+
+def dummy_density(radius):
+    heat_cap = lambda T, mfp: water.specific_heat_capacity(T)
+    viscosity = lambda T: -1.748e-5 * (T - 273) + 1.336e-3
+    return Suspension(water, heat_cap, np.pi / 6, viscosity, radius, 2000)
