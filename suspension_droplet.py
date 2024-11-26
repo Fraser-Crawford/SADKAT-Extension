@@ -206,19 +206,21 @@ class SuspensionDroplet(Droplet):
     @property
     def redistribute(self):
         sign = np.sign(self.cell_velocities)
-        volume_corrections = 4 * np.pi * (self.cell_boundaries ** 2 * self.cell_velocities)
+        volume_corrections = 4 * np.pi * self.cell_boundaries ** 2 * self.cell_velocities
+        volume_corrections = np.append(volume_corrections, [volume_corrections[-1]*self.layers/(self.layers-1)])
         concentrations = self.linear_layer_concentrations()[1:]
         result = np.zeros(self.layers)
+        fullness = (np.clip(concentrations[1:] - self.solution.critical_volume_fraction*self.solution.particle_density, a_min=0, a_max=None)
+                    *(self.solution.critical_volume_fraction*self.solution.particle_density - self.solution.particle_density)
+                    /(concentrations[1:]-self.solution.particle_density))
 
-        fullness = np.clip(concentrations[1:] - self.solution.particle_density, a_min=0, a_max=None)
-
-        for i in range(len(volume_corrections)):
+        for i in range(len(volume_corrections)-1):
             if sign[i] < 0:
-                value = volume_corrections[i] * (concentrations[i] + fullness[i])
+                value = volume_corrections[i] * (concentrations[i]) - volume_corrections[i+1] * fullness[i]
                 result[i] += value
                 result[i + 1] -= value
             else:
-                value = volume_corrections[i] * (concentrations[i + 1] + fullness[i])
+                value = volume_corrections[i] * concentrations[i + 1] - volume_corrections[i+1] * fullness[i]
                 result[i] += value
                 result[i + 1] -= value
 
@@ -296,7 +298,7 @@ class SuspensionDroplet(Droplet):
     @property
     def probe_concentration(self):
         linear_concentrations = self.linear_layer_concentrations()
-        radial_position = self.radius - 4 * self.solution.particle_radius
+        radial_position = self.radius - 6 * self.solution.particle_radius
         positions = np.concatenate(([0], self.cell_boundaries, [self.radius]))
         outer_index = np.max([np.argmax(positions>=radial_position),1])
         m = (linear_concentrations[outer_index] - linear_concentrations[outer_index-1]) / (positions[outer_index] - positions[outer_index-1])

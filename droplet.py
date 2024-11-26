@@ -378,6 +378,10 @@ class Droplet(ABC):
             efflorescing.terminal = True
             events += [efflorescing]
 
+        too_small = lambda time,x: self.virtual_droplet(x).radius - 0.5e-6
+        too_small.terminal = True
+        events += [too_small]
+
         dxdt = lambda time, x: self.virtual_droplet(x).dxdt(time)
 
         trajectory = self.solver(dxdt,(0,t), first_step, rtol, events)
