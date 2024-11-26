@@ -5,6 +5,7 @@ from numpy import typing as npt
 from scipy.integrate import solve_ivp
 from typing_extensions import Self
 from droplet import Droplet
+from suspension_droplet import crossing_rate
 from uniform import UniformDroplet
 from viscous_solution import ViscousSolution
 
@@ -170,21 +171,21 @@ class RadialDroplet(Droplet):
         return result
 
     @property
+    def corrected_crossing_rate(self):
+        radius = self.radius
+        R = self.cell_boundaries / radius
+        viscosity_ratio = self.solution.viscosity(self.mass_fraction_solute,self.temperature) / self.environment.dynamic_viscosity
+        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (1 + viscosity_ratio)
+
+    @property
     def circulate(self):
-        R = self.cell_boundaries / self.radius
-        viscosity_ratio = self.solution.viscosity(self.layer_mass_fraction_solute,self.temperature) / self.environment.dynamic_viscosity
-        convection_speed = self.relative_speed * (1 - R ** 2) / (8 * (1 + viscosity_ratio))
-        areas = 2 * np.pi * self.cell_boundaries ** 2
-        concentrations = self.linear_layer_concentrations()
-        top_half = convection_speed * concentrations[1:-1] * areas
-        bottom_half = convection_speed * concentrations[:-2] * areas
+        crossing_rates = self.corrected_crossing_rate
         result = np.zeros(self.layers)
-        for i in range(self.layers - 1):
-            result[i] += top_half[i]
-            result[i] -= bottom_half[i]
-            if i != self.layers - 1:
-                result[i + 1] -= top_half[i]
-                result[i + 1] += bottom_half[i]
+        for index, (m0, m1, rate) in enumerate(
+                zip(self.layer_mass_solute, self.layer_mass_solute[1:], crossing_rates)):
+            value = rate * (m0 - m1)
+            result[index] -= value
+            result[index + 1] += value
         return result
 
     @property

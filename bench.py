@@ -245,9 +245,9 @@ def polymer_samples(particle_diameter,droplet_radius,rh,temperature,volume_fract
 
 
 if __name__ == '__main__':
-    wet_bulb_bench()
+    #wet_bulb_bench()
     #print(pure_water_probe(0.1,0.0,273.15+17.9))
-    #polymer_samples(73.7e-9,23.8e-6,0.489,273.15+18,1.0e-2)
+    polymer_samples(73.7e-9,23.8e-6,0.489,273.15+18,1.0e-2)
     # wet_bulb_bench(0.05,0.0,273.15+17.9)
     # pure_bench(26.5e-6,303,0.1)
     # silica_bench(28.75e-6,0.5/100)
