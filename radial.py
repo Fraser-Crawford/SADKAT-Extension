@@ -23,7 +23,7 @@ class RadialDroplet(Droplet):
         average_layer_concentration = self.layer_mass_solute[:-1]/layer_volumes
         layer_density = self.solution.concentration_to_solute_mass_fraction(average_layer_concentration)
         layer_mass = layer_volumes*layer_density
-        layer_solvent_mass = layer_mass-self.layer_mass_solute()[:-1]
+        layer_solvent_mass = layer_mass-self.layer_mass_solute[:-1]
         outer_solvent = self.mass_solvent() - layer_solvent_mass
         outer_mfs = self.layer_mass_solute[-1]/(self.layer_mass_solute[-1]+outer_solvent)
         outer_density = self.solution.density(outer_mfs)
