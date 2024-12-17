@@ -28,6 +28,7 @@ class RadialDroplet(Droplet):
         outer_mfs = self.layer_mass_solute[-1]/(self.layer_mass_solute[-1]+outer_solvent)
         outer_density = self.solution.density(outer_mfs)
         outer_volume = (outer_solvent+self.layer_mass_solute[-1])/outer_density
+        print(outer_volume)
         return np.sum(layer_volumes)+outer_volume
 
     @property
