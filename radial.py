@@ -5,6 +5,7 @@ from numpy import typing as npt
 from scipy.integrate import solve_ivp
 from typing_extensions import Self
 from droplet import Droplet
+from fit import correct_radius
 from suspension_droplet import crossing_rate
 from uniform import UniformDroplet
 from viscous_solution import ViscousSolution
@@ -17,18 +18,28 @@ damping = 2.0*np.sqrt(stiffness*layer_inertia)
 class RadialDroplet(Droplet):
 
     @property
-    def volume(self) -> float:
-        true_boundaries = np.concatenate(([0],self.cell_boundaries))
-        layer_volumes = np.array([4 / 3 * np.pi * (r1 ** 3 - r0 ** 3) for r0, r1 in zip(true_boundaries, true_boundaries[1:])])
-        average_layer_concentration = self.layer_mass_solute[:-1]/layer_volumes
-        layer_density = self.solution.concentration_to_solute_mass_fraction(average_layer_concentration)
-        layer_mass = layer_volumes*layer_density
-        layer_solvent_mass = layer_mass-self.layer_mass_solute[:-1]
-        outer_solvent = self.mass_solvent() - np.sum(layer_solvent_mass)
-        outer_mfs = self.layer_mass_solute[-1]/(self.layer_mass_solute[-1]+outer_solvent)
-        outer_density = self.solution.density(outer_mfs)
-        outer_volume = (outer_solvent+self.layer_mass_solute[-1])/outer_density
-        return np.sum(layer_volumes)+outer_volume
+    def volume(self)->float:
+        return self.mass/self.density
+
+    def measured_radius(self) -> float:
+        return correct_radius(self.radius,self.refractive_index(),1.335)
+
+    def refractive_index(self):
+        return self.solution.refractive_index(self.mass_fraction_solute,self.temperature)
+
+    #@property
+    #def volume(self) -> float:
+    #    true_boundaries = np.concatenate(([0],self.cell_boundaries))
+    #    layer_volumes = np.array([4 / 3 * np.pi * (r1 ** 3 - r0 ** 3) for r0, r1 in zip(true_boundaries, true_boundaries[1:])])
+    #    average_layer_concentration = self.layer_mass_solute[:-1]/layer_volumes
+    #    layer_density = self.solution.concentration_to_solute_mass_fraction(average_layer_concentration)
+    #    layer_mass = layer_volumes*layer_density
+    #    layer_solvent_mass = layer_mass-self.layer_mass_solute[:-1]
+    #    outer_solvent = self.mass_solvent() - np.sum(layer_solvent_mass)
+    #    outer_mfs = self.layer_mass_solute[-1]/(self.layer_mass_solute[-1]+outer_solvent)
+    #    outer_density = self.solution.density(outer_mfs)
+    #    outer_volume = (outer_solvent+self.layer_mass_solute[-1])/outer_density
+    #    return np.sum(layer_volumes)+outer_volume
 
     @property
     def solute_sherwood_number(self) -> float:

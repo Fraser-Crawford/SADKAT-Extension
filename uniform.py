@@ -8,9 +8,14 @@ from typing_extensions import Self
 import numpy as np
 from numpy import typing as npt
 from droplet import Droplet
+from fit import correct_radius
+
 
 @dataclass
 class UniformDroplet(Droplet):
+
+    def measured_radius(self) -> float:
+        return correct_radius(self.radius,self.refractive_index(),1.335)
 
     def refractive_index(self):
         return self.solution.refractive_index(self.mass_fraction_solute,self.temperature)

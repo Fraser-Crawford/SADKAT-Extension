@@ -1,4 +1,4 @@
-from fit import beta
+from fit import beta, correct_radius
 from solution_definitions import aqueous_NaCl
 from suspension import Suspension
 from dataclasses import dataclass
@@ -35,6 +35,9 @@ def crossing_rate(normalised_boundaries:npt.NDArray[np.float_],radius:float)->np
 
 @dataclass
 class SuspensionDroplet(Droplet):
+
+    def measured_radius(self) -> float:
+        return correct_radius(self.radius,self.solution.solvent.refractive_index,1.335)
 
     @property
     def volume(self) -> float:

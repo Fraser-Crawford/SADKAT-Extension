@@ -102,6 +102,10 @@ class Droplet(ABC):
     def concentration(self):
         return self.mass_solute()/self.volume
 
+    @abstractmethod
+    def measured_radius(self)->float:
+        pass
+
     @property
     def complete_state(self):
         """All droplet variables, including both independent and dependent variables that completely
@@ -119,6 +123,7 @@ class Droplet(ABC):
                     concentration=self.concentration,
                     density=self.density,
                     radius=self.radius,
+                    measured_radius=self.measured_radius(),
                     refractive_index=self.refractive_index,
                     vapour_pressure=self.vapour_pressure,
                     temperature=self.temperature,
