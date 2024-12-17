@@ -270,6 +270,12 @@ class Droplet(ABC):
         return 1 + 0.3 * Re ** (1 / 2) * Pr ** (1 / 3)
 
     @property
+    def kappa(self):
+        wet_bulb = self.copy()
+        wet_bulb.temperature=self.environment.wet_bulb_temperature
+        return -2*wet_bulb.dmdt()/(np.pi*wet_bulb.radius*wet_bulb.density)
+
+    @property
     def knudsen_number(self):
         """Non dimensional number describing size regime"""
         return self.environment.mean_free_path / self.radius
@@ -378,7 +384,7 @@ class Droplet(ABC):
             efflorescing.terminal = True
             events += [efflorescing]
 
-        too_small = lambda time,x: self.virtual_droplet(x).radius - 0.5e-6
+        too_small = lambda time,x: self.virtual_droplet(x).radius - 2.0e-6
         too_small.terminal = True
         events += [too_small]
 

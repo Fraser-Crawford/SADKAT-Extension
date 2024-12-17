@@ -165,6 +165,7 @@ class SuspensionDroplet(Droplet):
             state)
 
     def dxdt(self, time) -> npt.NDArray[np.float_]:
+        print(time)
         return np.hstack((self.boundary_correction(), self.boundary_acceleration(), self.change_in_particles_mass(),
                           self.dmdt(), self.dTdt(), self.dvdt(), self.drdt()))
 
