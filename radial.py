@@ -9,7 +9,6 @@ from suspension_droplet import crossing_rate
 from uniform import UniformDroplet
 from viscous_solution import ViscousSolution
 
-
 layer_inertia = 1
 stiffness = 100
 damping = 2.0*np.sqrt(stiffness*layer_inertia)
