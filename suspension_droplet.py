@@ -234,14 +234,14 @@ class SuspensionDroplet(Droplet):
         radius = self.radius
         R = self.cell_boundaries / radius
         viscosity_ratio = self.solution.viscosity(self.temperature) / self.environment.dynamic_viscosity
-        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (1 + viscosity_ratio)
+        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (1 + viscosity_ratio) * (self.layers/100)
 
     @property
     def circulate(self):
         crossing_rates = self.corrected_crossing_rate
         result = np.zeros(self.layers)
         for index,(m0,m1,rate) in enumerate(zip(self.layer_mass_particles,self.layer_mass_particles[1:],crossing_rates)):
-            value = rate*(m0-m1)
+            value = self.layers*rate*(m0-m1)/self.radius
             result[index] -= value
             result[index + 1] += value
         return result
@@ -272,7 +272,7 @@ class SuspensionDroplet(Droplet):
 
 
     def change_in_particles_mass(self):
-        return (self.redistribute + self.diffuse + self.circulate) / self.layer_mass_particles
+        return (self.redistribute + self.diffuse) / self.layer_mass_particles
 
     def mass_particles(self):
         return np.sum(self.layer_mass_particles)

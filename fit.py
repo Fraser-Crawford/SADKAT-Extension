@@ -169,9 +169,8 @@ def beta(Pe):
 median_observation_angle = np.radians(45)
 
 def correction_factor(RI):
-    return np.cos(median_observation_angle / 2.0) + RI * np.sin(median_observation_angle / 2.0) / (
-        np.sqrt(1.0 + RI ** 2 - 2.0 * RI * np.cos(median_observation_angle / 2.0)))
-
+    return 1/(np.cos(median_observation_angle / 2.0) + RI * np.sin(median_observation_angle / 2.0) / (
+        np.sqrt(1.0 + RI ** 2 - 2.0 * RI * np.cos(median_observation_angle / 2.0))))
 
 def correct_radius(radius, previous_RI, new_RI):
     return radius / correction_factor(previous_RI) * correction_factor(new_RI)

@@ -195,7 +195,7 @@ class RadialDroplet(Droplet):
         radius = self.radius
         R = self.cell_boundaries / radius
         viscosity_ratio = self.solution.viscosity(self.mass_fraction_solute,self.temperature) / self.environment.dynamic_viscosity
-        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (1 + viscosity_ratio)
+        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (1 + viscosity_ratio) * (self.layers / 100)
 
     @property
     def circulate(self):

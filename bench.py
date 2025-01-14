@@ -7,8 +7,10 @@ from uniform import UniformDroplet
 from viscous_defintions import viscous_aqueous_NaCl
 import matplotlib.pyplot as plt
 import numpy as np
-
+from glob import glob
+from viscous_solution import ViscousSolution
 from water import water
+import pandas as pd
 
 gravity = np.array([0, 0, 0])
 
@@ -51,28 +53,39 @@ def peclet_bench():
     plt.show()
 
 
-def radial_bench(layers):
+def radial_bench(solution: ViscousSolution, environments, radii, mfss, temperatures, data=None):
     print("Starting radial benchmark")
-    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, layers)
-    df = radial.complete_trajectory(radial.integrate(1))
-    print("Integrated")
-    positions = []
-    concentrations = []
-    max_time = np.max(df.time)
-    step = max_time / 20
-    goal = 0
-    for i in range(len(df.time.values)):
-        concentrations.append(df.layer_concentrations[i])
-        positions.append(df.layer_positions[i])
-        time = df.time.values[i]
-        if time >= goal:
-            plt.plot(df.layer_positions[i], df.layer_concentrations[i])
-            goal += step
-    plt.plot(positions, concentrations, "--")
-    plt.xlim(left=0)
-    plt.xlabel("Distance from center of droplet / m")
-    plt.ylabel("Concentration / g/L")
-    plt.show()
+    print(len(environments), len(radii), len(mfss), len(temperatures))
+    if data is None:
+        data = [None] * len(environments)
+    for environment, radius, mfs, temperature, datum in zip(environments, radii, mfss, temperatures, data):
+        radial = RadialDroplet.from_mfs(solution, environment, gravity, radius, mfs, temperature, 50)
+        df = radial.complete_trajectory(radial.integrate(5, terminate_on_efflorescence=True, eff_threshold=0.45))
+        print("Integrated")
+        max_time = np.max(df.time)
+        step = max_time / 20
+        goal = 0
+        for i in range(len(df.time.values)):
+            time = df.time.values[i]
+            if time >= goal:
+                plt.plot(df.layer_positions[i], df.layer_concentrations[i])
+                goal += step
+        plt.plot(df.layer_positions[i], df.layer_concentrations[i])
+        plt.xlim(left=0)
+        plt.xlabel("Distance from center of droplet / m")
+        plt.ylabel("Concentration / g/L")
+        plt.hlines(viscous_aqueous_NaCl.concentration(viscous_aqueous_NaCl.mass_fraction_from_activity(0.45)), 0,
+                   radius, "black", "--")
+        plt.title(
+            f"{radius * 1e6:.1f} um radius droplet of {mfs:.3f} mass fraction of solute \n {environment.relative_humidity * 100:.1f}% RH, {environment.temperature:.1f} K and {np.linalg.norm(environment.velocity):.2f} m/s air flow speed. EFF. = {max_time:.2f} s")
+        plt.show()
+        if datum is not None:
+            for droplet in datum:
+                plt.scatter(droplet.relative_time, droplet.radius * 1e-6, s=4)
+        plt.plot(df.time, df.measured_radius, color="black")
+        plt.xlabel("Time / s")
+        plt.ylabel("Droplet radius / m")
+        plt.show()
 
 
 def dummy_suspension_bench():
@@ -95,10 +108,10 @@ def dummy_suspension_bench():
     plt.show()
 
 
-def silica_bench(droplet_radius, silica_volume_fraction,temp, rh):
+def silica_bench(droplet_radius, silica_volume_fraction, temp, rh):
     silica_suspension = silica(180e-9 / 2)
     mass_fraction = silica_volume_fraction * 2200 / (
-                (1 - silica_volume_fraction) * 1000 + silica_volume_fraction * 2200)
+            (1 - silica_volume_fraction) * 1000 + silica_volume_fraction * 2200)
     layers = [100]
     for layer in layers:
         print(layer)
@@ -121,45 +134,12 @@ def silica_bench(droplet_radius, silica_volume_fraction,temp, rh):
                 plt.plot(df.all_positions[i], df.layer_concentrations[i])
                 goal += step
         plt.title(
-            f"Initial radius {droplet_radius*1e6:.1f} um, T = {temp:.0f} K, RH = {rh*100:.0f}%, {silica_volume_fraction*100:.1f}% v/v \n locking point time of {np.max(df.time):.2f} s, locking point radius of {np.min(df.radius) * 1e6:.2f} um")
+            f"Initial radius {droplet_radius * 1e6:.1f} um, T = {temp:.0f} K, RH = {rh * 100:.0f}%, {silica_volume_fraction * 100:.1f}% v/v \n locking point time of {np.max(df.time):.2f} s, locking point radius of {np.min(df.radius) * 1e6:.2f} um")
         plt.plot(positions[-1], concentrations[-1])
         plt.plot(positions, concentrations, "--")
         plt.xlabel("Distance from center of droplet / m")
         plt.ylabel("Concentration / g/L")
         plt.show()
-
-
-def pure_bench(radius, temperature, rh):
-    environment = Atmosphere(temperature, rh)
-    uniform = UniformDroplet.from_mfs(aqueous_NaCl, environment, gravity, radius, 0.0, temperature)
-    df = uniform.complete_trajectory(uniform.integrate(1.6))
-    print(np.interp(11.3e-6, df.radius[::-1], df.time[::-1]))
-    plt.plot(df.time, df.radius)
-    plt.show()
-
-
-def linear_layer_concentrations():
-    radial = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(313), gravity, 50e-6, 0.1, 313, 20)
-    plt.plot(radial.all_positions(), radial.linear_layer_concentrations())
-    plt.scatter(radial.all_positions(), radial.linear_layer_concentrations())
-    plt.show()
-
-
-def mass_conservation():
-    silica_suspension = silica(90e-9)
-    volume = 1
-    particle_volume = volume * 0.06e-2
-    solvent_volume = volume - particle_volume
-    mass_fraction = particle_volume * 2200 / (solvent_volume * 1000 + particle_volume * 2200)
-    layers = [2, 3, 4, 5, 6, 7, 8, 9, 10]
-    for layer in layers:
-        print(layer)
-        suspension = SuspensionDroplet.from_mfp(silica_suspension, Atmosphere(303), gravity, 25.6e-6,
-                                                mass_fraction, 303, layer)
-        df = suspension.complete_trajectory(suspension.integrate(2))
-        plt.plot(df.time, df.mass_particles)
-        print(np.mean(df.mass_particles))
-    plt.show()
 
 
 # Given a RH and air speed value, calculate the kappa value of the linear r2 region.
@@ -181,42 +161,52 @@ def pure_water_probe(rh, air_speed, temperature):
     m, c = np.linalg.lstsq(A, y, rcond=None)[0]
     return m
 
+
 def wet_bulb_bench():
-    temperature = 273.15+17.9
-    rhs = np.linspace(0.05,0.4,8)
-    data = 1e-12*np.array([-384.3789297883893, -357.5978481521835, -332.3947123690286, -308.0702741011096, -286.36919829362466, -264.6921321164674, -243.04471193334453, -221.7899312880983])
+    temperature = 273.15 + 17.9
+    rhs = np.linspace(0.05, 0.4, 8)
+    data = 1e-12 * np.array(
+        [-384.3789297883893, -357.5978481521835, -332.3947123690286, -308.0702741011096, -286.36919829362466,
+         -264.6921321164674, -243.04471193334453, -221.7899312880983])
     sizes = [20e-6]
     gradients = []
     for size in sizes:
-        droplets = [UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temperature,relative_humidity=rh), gravity, size, 0.0, temperature, 0) for rh in rhs]
+        droplets = [
+            UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temperature, relative_humidity=rh), gravity, size, 0.0,
+                                    temperature, 0) for rh in rhs]
         for droplet in droplets:
-            gradients += [-droplet.kappa/4]
-        plt.plot(rhs,gradients,label=f"Still model")
-    plt.plot(rhs, data,label=f"Experiment data")
+            gradients += [-droplet.kappa / 4]
+        plt.plot(rhs, gradients, label=f"Still model")
+    plt.plot(rhs, data, label=f"Experiment data")
     plt.xlabel("Relative Humidity")
     plt.ylabel("d(r^2)/dt / m2 s-1")
     plt.legend()
     plt.show()
     droplet = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(temperature), gravity, 20e-6, 0.0, temperature, 0)
-    droplet.velocity = np.array([1.0,0.0,0.0])
+    droplet.velocity = np.array([1.0, 0.0, 0.0])
     print(droplet.reynolds_number)
-    reynolds = ((data/np.array(gradients)-1)/(0.3*np.cbrt(droplet.schmidt_number)))**2
-    plt.plot(rhs,reynolds)
+    reynolds = ((data / np.array(gradients) - 1) / (0.3 * np.cbrt(droplet.schmidt_number))) ** 2
+    plt.plot(rhs, reynolds)
     plt.xlabel("Relative Humidity")
     plt.ylabel("Reynolds Number")
     plt.show()
     df = droplet.complete_trajectory(droplet.integrate(2.0))
-    plt.plot(df.time,df.sherwood_number)
+    plt.plot(df.time, df.sherwood_number)
     plt.show()
 
-def poly2d(rh, v, c):
-    return c[0] * rh ** 2 * v ** 2 + c[1] * rh * v ** 2 + c[2] * v ** 2 + c[3] * rh ** 2 * v + c[4] * rh * v + c[5] * v + c[6] * rh ** 2 + c[7] * rh + (rh * 0 + c[6])
 
-def polymer_samples(particle_diameter,droplet_radius,rh,temperature,volume_fraction):
-    suspension = dummy_density(particle_diameter/2.0)
+def poly2d(rh, v, c):
+    return c[0] * rh ** 2 * v ** 2 + c[1] * rh * v ** 2 + c[2] * v ** 2 + c[3] * rh ** 2 * v + c[4] * rh * v + c[
+        5] * v + c[6] * rh ** 2 + c[7] * rh + (rh * 0 + c[6])
+
+
+def polymer_samples(particle_diameter, droplet_radius, rh, temperature, volume_fraction):
+    suspension = dummy_density(particle_diameter / 2.0)
     mass_fraction = volume_fraction * suspension.particle_density / (
-            (1 - volume_fraction) * suspension.solvent.density(temperature) + volume_fraction * suspension.particle_density)
-    droplet = SuspensionDroplet.from_mfp(suspension, Atmosphere(temperature, rh, velocity=np.array([0.02, 0, 0])),np.array([0,0,0]),droplet_radius,mass_fraction,temperature,layers=100)
+            (1 - volume_fraction) * suspension.solvent.density(
+        temperature) + volume_fraction * suspension.particle_density)
+    droplet = SuspensionDroplet.from_mfp(suspension, Atmosphere(temperature, rh, velocity=np.array([0.02, 0, 0])),
+                                         np.array([0, 0, 0]), droplet_radius, mass_fraction, temperature, layers=100)
     df = droplet.complete_trajectory(droplet.integrate(20))
     print(np.max(df.time), np.min(df.radius))
     print()
@@ -232,40 +222,104 @@ def polymer_samples(particle_diameter,droplet_radius,rh,temperature,volume_fract
         if time >= goal:
             plt.plot(df.all_positions[i], df.layer_concentrations[i])
             goal += step
-    plt.title(f"Particle radius of {particle_diameter*1e9/2.0:.1f} nm, locking point time of {np.max(df.time):.2f} s,\n from initial droplet radius {droplet_radius * 1e6:.2f} um to locking point radius of {np.min(df.radius) * 1e6:.2f} um")
+    plt.title(
+        f"Particle radius of {particle_diameter * 1e9 / 2.0:.1f} nm, locking point time of {np.max(df.time):.2f} s,\n from initial droplet radius {droplet_radius * 1e6:.2f} um to locking point radius of {np.min(df.radius) * 1e6:.2f} um")
     plt.plot(positions[-1], concentrations[-1])
     plt.plot(positions, concentrations, "--")
     plt.xlabel("Distance from center of droplet / m")
     plt.ylabel("Concentration / g/L")
     plt.show()
 
-def wet_bulb_salts(rh,temperature):
-    environment = Atmosphere(temperature,relative_humidity=rh,velocity=np.array([0.2,0.0,0.0]))
+
+def wet_bulb_salts(rh, temperature):
+    environment = Atmosphere(temperature, relative_humidity=rh, velocity=np.array([0.2, 0.0, 0.0]))
     droplet = UniformDroplet.from_mfs(aqueous_NaCl, environment, gravity, 20e-6, 0.0, temperature)
     df = droplet.complete_trajectory(droplet.integrate(2.0))
     fig, ax1 = plt.subplots()
-    ax1.plot(df.time,df.temperature)
-    ax1.hlines([temperature,environment.wet_bulb_temperature],df.time.min(),df.time.max(),linestyle="--")
+    ax1.plot(df.time, df.temperature)
+    ax1.hlines([temperature, environment.wet_bulb_temperature], df.time.min(), df.time.max(), linestyle="--")
     ax2 = ax1.twinx()
-    ax2.plot(df.time,df.radius,color="black")
+    ax2.plot(df.time, df.radius, color="black")
     plt.show()
-    plt.plot(df.time,df.vapour_pressure)
-    plt.plot(df.time,[water.equilibrium_vapour_pressure(t) for t in df.temperature])
+    plt.plot(df.time, df.vapour_pressure)
+    plt.plot(df.time, [water.equilibrium_vapour_pressure(t) for t in df.temperature])
     plt.show()
+
+
+def salt_data():
+    directories = [
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1228s 40% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1240s 35% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1255s 30% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1310s 25% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1326s 20% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1340s 15% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1354s 10% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1407s 5% salt",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Data\24-11-21\24-11-21_1418s 0% salt"]
+    data = []
+    for folder in directories:
+        files = glob(fr"{folder}\TrimmedDroplets\*.csv")
+        results = [pd.read_csv(f"{file}") for file in files]
+        data.append(results)
+    temperatures = [273.15 + 17.7, 273.15 + 17.7, 273.15 + 17.7, 273.15 + 17.7, 273.15 + 17.41, 273.15 + 17.41,
+                    273.15 + 17.41, 273.15 + 17.41, 273.15 + 17.53]
+    RHs = [0.4, 0.35, 0.3, 0.25, 0.2, 0.15, 0.1, 0.05, 0.0]
+    air_flows = [np.array([0.6, 0, 0]), np.array([0.6, 0, 0]), np.array([0.6, 0, 0]), np.array([0.6, 0, 0]),
+                 np.array([0.65, 0, 0]), np.array([0.75, 0, 0]), np.array([0.7, 0, 0]), np.array([0.7, 0, 0]),
+                 np.array([0.6, 0, 0])]
+    radii = [27.5e-6, 27.5e-6, 27.5e-6, 27.5e-6, 27.5e-6, 27.5e-6, 27.5e-6, 27.5e-6, 27.5e-6]
+    solution = viscous_aqueous_NaCl
+    mfss = [solution.concentration_to_solute_mass_fraction(22)] * len(temperatures)
+    environments = [Atmosphere(t, rh, velocity=air_flow) for t, rh, air_flow in zip(temperatures, RHs, air_flows)]
+    radial_bench(solution, environments, radii, mfss, temperatures, data)
+
+
+def suspension_paper(Ts, RHs, R0s, silica_volume_fraction):
+    silica_suspension = silica(180e-9 / 2)
+    mass_fraction = silica_volume_fraction * 2200 / (
+            (1 - silica_volume_fraction) * 1000 + silica_volume_fraction * 2200)
+    for T, RH, R0 in zip(Ts, RHs, R0s):
+        print(T, RH, R0)
+        suspension = SuspensionDroplet.from_mfp(silica_suspension,
+                                                Atmosphere(T, velocity=np.array([0.02, 0, 0]), relative_humidity=RH),
+                                                gravity, R0, mass_fraction, T, 100)
+        df = suspension.complete_trajectory(suspension.integrate(20))
+        print(np.max(df.time), np.min(df.radius))
+        print()
+        positions = []
+        concentrations = []
+        max_time = np.max(df.time)
+        step = max_time / 20
+        goal = step
+        for i in range(len(df.time.values)):
+            concentrations.append(df.layer_concentrations[i])
+            positions.append(df.all_positions[i])
+            time = df.time.values[i]
+            if time >= goal:
+                plt.plot(df.all_positions[i], df.layer_concentrations[i])
+                goal += step
+        plt.title(
+            f"Initial radius {R0 * 1e6:.1f} um, T = {T:.0f} K, RH = {RH * 100:.0f}%, {silica_volume_fraction * 100:.1f}% v/v \n locking point time of {np.max(df.time):.2f} s, locking point radius of {np.min(df.radius) * 1e6:.2f} um")
+        plt.plot(positions[-1], concentrations[-1])
+        plt.plot(positions, concentrations, "--")
+        plt.xlabel("Distance from center of droplet / m")
+        plt.ylabel("Concentration / g/L")
+        plt.show()
+
 
 if __name__ == '__main__':
-    wet_bulb_bench()
-    #print(pure_water_probe(0.1,0.0,273.15+17.9))
-    #polymer_samples(73.7e-9,23.8e-6,0.489,273.15+18,1.0e-2)
-    # pure_bench(26.5e-6,303,0.1)
-    #silica_bench(28.5e-6, 0.5 / 100, 294, 0.8)
-    # radial_bench(100)
-    # peclet_bench()
-    # dummy_suspension_bench()
-    # linear_layer_concentrations()
-    # mass_conservation()
-    # mfs = aqueous_NaCl.mass_fraction_from_activity(0.47)
-    # concentration = aqueous_NaCl.concentration(mfs)
-    # print(concentration)
-    #wet_bulb_salts(0.05,293)
-
+    Ts = [263, 273, 282, 289, 294, 303, 311, 318, 326]
+    RHs = np.array([1.9, 5.0, 6.5, 3.2, 4.8, 13.6, 3.8, 3.0, 7.3])
+    RHs /= 100
+    R0s = np.array([30.93654,
+                    28.4552,
+                    30.75283,
+                    30.74567,
+                    28.75962,
+                    26.53845,
+                    29.03372,
+                    30.01602,
+                    31.56409,])
+    R0s *= 1e-6
+    suspension_paper(Ts,RHs,R0s,0.6/100)
