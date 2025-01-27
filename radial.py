@@ -215,7 +215,7 @@ class RadialDroplet(Droplet):
         radius = self.radius
         redistribute = self.redistribute()
         layer_diffusion= self.solution.diffusion(self.layer_mass_fraction_solute,self.temperature)
-        average_diffusion = (layer_diffusion+layer_diffusion[1:])/2
+        average_diffusion = (layer_diffusion[:-1]+layer_diffusion[1:])/2
         normalised_boundaries = self.all_positions()/radius
         gradients = self.get_gradients(normalised_boundaries)
         diffusion = np.zeros(self.layers)
