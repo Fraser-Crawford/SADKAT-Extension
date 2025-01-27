@@ -14,30 +14,34 @@ layer_inertia = 1
 stiffness = 100
 damping = 2.0 * np.sqrt(stiffness * layer_inertia)
 
-def reverse_planck(x,a,b,c,d):
-    X = x-1
-    return a*(-X)**b/(np.exp(-c*X)-1) + d*X**2
 
-def crossing_rate(normalised_boundaries:npt.NDArray[np.float_],radius:float)->npt.NDArray[np.float_]:
-    a_poly = np.poly1d([ 2.19783107e-04, -3.51635586e-02,  2.38920835e+00, -8.93283977e+01,
-  1.98888346e+03, -2.66112346e+04,  2.05816461e+05, -8.23708581e+05,
-  1.31175102e+06])
-    b_poly = np.poly1d([ 2.53448443e-09, -3.85291781e-07,  2.47342925e-05, -8.69224399e-04,
-  1.81006090e-02, -2.25349160e-01,  1.60144207e+00, -5.63447673e+00,
-  1.01377002e+01])
-    c_poly = np.poly1d([ 1.05469823e-08, -1.56729633e-06, 9.80793232e-05, -3.34821449e-03,
-  6.74374840e-02, -8.08136859e-01,  5.51197720e+00, -1.88149952e+01,
-  3.49201721e+01])
-    d_poly = np.poly1d([ 4.02218255e-09, -5.59484149e-07,  3.25011115e-05, -1.02161469e-03,
-  1.88471472e-02, -2.07924035e-01,  1.35272436e+00, -5.00837063e+00,
-  1.01290991e+01])
-    return reverse_planck(normalised_boundaries, a_poly(radius*1e6), b_poly(radius*1e6), c_poly(radius*1e6), d_poly(radius*1e6))/2
+def reverse_planck(x, a, b, c, d):
+    X = x - 1
+    return a * (-X) ** b / (np.exp(-c * X) - 1) + d * X ** 2
+
+
+def crossing_rate(normalised_boundaries: npt.NDArray[np.float_], radius: float) -> npt.NDArray[np.float_]:
+    a_poly = np.poly1d([2.19783107e-04, -3.51635586e-02, 2.38920835e+00, -8.93283977e+01,
+                        1.98888346e+03, -2.66112346e+04, 2.05816461e+05, -8.23708581e+05,
+                        1.31175102e+06])
+    b_poly = np.poly1d([2.53448443e-09, -3.85291781e-07, 2.47342925e-05, -8.69224399e-04,
+                        1.81006090e-02, -2.25349160e-01, 1.60144207e+00, -5.63447673e+00,
+                        1.01377002e+01])
+    c_poly = np.poly1d([1.05469823e-08, -1.56729633e-06, 9.80793232e-05, -3.34821449e-03,
+                        6.74374840e-02, -8.08136859e-01, 5.51197720e+00, -1.88149952e+01,
+                        3.49201721e+01])
+    d_poly = np.poly1d([4.02218255e-09, -5.59484149e-07, 3.25011115e-05, -1.02161469e-03,
+                        1.88471472e-02, -2.07924035e-01, 1.35272436e+00, -5.00837063e+00,
+                        1.01290991e+01])
+    return reverse_planck(normalised_boundaries, a_poly(radius * 1e6), b_poly(radius * 1e6), c_poly(radius * 1e6),
+                          d_poly(radius * 1e6)) / 2
+
 
 @dataclass
 class SuspensionDroplet(Droplet):
 
     def measured_radius(self) -> float:
-        return correct_radius(self.radius,self.solution.solvent.refractive_index,1.335)
+        return correct_radius(self.radius, self.solution.solvent.refractive_index, 1.335)
 
     @property
     def volume(self) -> float:
@@ -81,19 +85,21 @@ class SuspensionDroplet(Droplet):
 
     @property
     def diffusion_coefficient(self):
-        return self.solution.diffusion(self.temperature) #*self.particle_sherwood_number
+        return self.solution.diffusion(self.temperature)  # *self.particle_sherwood_number
 
     @property
     def particle_sherwood_number(self):
-        Sc = self.solution.viscosity(self.temperature)/(self.solution.solvent.density(self.temperature) * self.solution.diffusion(self.temperature))
+        Sc = self.solution.viscosity(self.temperature) / (
+                self.solution.solvent.density(self.temperature) * self.solution.diffusion(self.temperature))
         Pe = self.peclet
-        Re = Pe/Sc
-        return 1 + 0.3*np.sqrt(Re)*np.cbrt(Sc)
+        Re = Pe / Sc
+        return 1 + 0.3 * np.sqrt(Re) * np.cbrt(Sc)
 
     @property
     def peclet(self):
         return -self.dmdt() / (
-                self.solution.diffusion(self.temperature) * 4 * np.pi * self.radius * self.solution.solvent.density(self.temperature))
+                self.solution.diffusion(self.temperature) * 4 * np.pi * self.radius * self.solution.solvent.density(
+            self.temperature))
 
     @property
     def layers(self):
@@ -102,7 +108,7 @@ class SuspensionDroplet(Droplet):
     @staticmethod
     def from_mfp(solution: Suspension, environment, gravity,
                  radius, mass_fraction_particles, temperature, layers=10,
-                 velocity=np.zeros(3), position=np.zeros(3),stationary=True):
+                 velocity=np.zeros(3), position=np.zeros(3), stationary=True):
         """Create a droplet from experimental conditions.
 
         Args:
@@ -118,14 +124,13 @@ class SuspensionDroplet(Droplet):
         volume = 4 * np.pi / 3 * radius ** 3
         mass_particles = mass_fraction_particles * solution.particle_density * volume
         mass_solvent = (1 - mass_fraction_particles) * solution.solvent.density(temperature) * volume
-
-        cell_boundaries = radius * np.array([i / layers for i in range(1, layers)])
+        cell_boundaries = radius * np.arange(1,layers)/layers
         concentration = mass_particles / volume
         real_boundaries = np.concatenate(([0], cell_boundaries, [radius]))
-        log_mass_solute = np.log(np.array([4 / 3 * np.pi * (r1 ** 3 - r0 ** 3) * concentration for r0, r1 in
-                                           zip(real_boundaries, real_boundaries[1:])]))
+        log_mass_solute = np.log(4/3*np.pi*concentration*(real_boundaries[1:]**3-real_boundaries[:-1]**3))
         cell_velocities = np.zeros(len(cell_boundaries))
-        return SuspensionDroplet(solution, environment, gravity, stationary, temperature, velocity, position, mass_solvent,
+        return SuspensionDroplet(solution, environment, gravity, stationary, temperature, velocity, position,
+                                 mass_solvent,
                                  cell_boundaries, cell_velocities, log_mass_solute)
 
     def state(self) -> npt.NDArray[np.float_]:
@@ -143,13 +148,11 @@ class SuspensionDroplet(Droplet):
         masses = self.layer_mass_particles
         c0 = 3 * masses[0] / (4 * np.pi * r03s[0])
         c = [c0, c0]
-
         for r03, r04, r13, r14, mass, r0, r1 in zip(r03s, r04s, r13s, r14s, masses[1:], r0s, r1s):
             numerator = mass / np.pi + 4 / 3 * c[-1] * (r03 - r13)
             denominator = r14 - r04 + 4 / 3 * r0 * (r03 - r13)
             gradient = numerator / denominator
             c.append(gradient * (r1 - r0) + c[-1])
-
         return np.array(c)
 
     def split_state(self, state: npt.NDArray[np.float_]):
@@ -168,13 +171,12 @@ class SuspensionDroplet(Droplet):
             state)
 
     def dxdt(self, time) -> npt.NDArray[np.float_]:
-        print(time)
         return np.hstack((self.boundary_correction(), self.boundary_acceleration(), self.change_in_particles_mass(),
                           self.dmdt(), self.dTdt(), self.dvdt(), self.drdt()))
 
     @property
     def deviation(self):
-        return self.cell_boundaries - self.radius * np.array([i / self.layers for i in range(1, self.layers)])
+        return self.cell_boundaries - self.radius * np.arange(1,self.layers)/self.layers
 
     def boundary_acceleration(self):
         return (-self.cell_velocities * damping - stiffness * self.deviation / self.radius) / layer_inertia
@@ -185,7 +187,7 @@ class SuspensionDroplet(Droplet):
     @property
     def layer_volume(self):
         true_boundaries = np.concatenate(([0], self.cell_boundaries, [self.radius]))
-        return np.array([4 / 3 * np.pi * (r1 ** 3 - r0 ** 3) for r0, r1 in zip(true_boundaries, true_boundaries[1:])])
+        return 4/3*np.pi*(true_boundaries[1:]**3-true_boundaries[:-1]**3)
 
     @property
     def average_layer_concentrations(self):
@@ -211,37 +213,40 @@ class SuspensionDroplet(Droplet):
     def redistribute(self):
         sign = np.sign(self.cell_velocities)
         volume_corrections = 4 * np.pi * self.cell_boundaries ** 2 * self.cell_velocities
-        volume_corrections = np.append(volume_corrections, [volume_corrections[-1]*self.layers/(self.layers-1)])
+        volume_corrections = np.append(volume_corrections, [volume_corrections[-1] * self.layers / (self.layers - 1)])
         concentrations = self.linear_layer_concentrations()[1:]
         result = np.zeros(self.layers)
-        fullness = (np.clip(concentrations[1:] - self.solution.critical_volume_fraction*self.solution.particle_density, a_min=0, a_max=None)
-                    *(self.solution.critical_volume_fraction*self.solution.particle_density - self.solution.particle_density)
-                    /(concentrations[1:]-self.solution.particle_density))
-
-        for i in range(len(volume_corrections)-1):
+        fullness = (self.solution.rigidity *
+                np.clip(concentrations[1:] - self.solution.critical_volume_fraction * self.solution.particle_density,a_min=0,a_max=None)**2 /
+                    (self.solution.max_volume_fraction*self.solution.particle_density - self.solution.critical_volume_fraction * self.solution.particle_density)
+        )
+        for i in range(len(volume_corrections) - 1):
             if sign[i] < 0:
-                value = volume_corrections[i] * (concentrations[i]) - volume_corrections[i+1] * fullness[i]
+                value = volume_corrections[i] * (concentrations[i]) - volume_corrections[i + 1] * fullness[i]
                 result[i] += value
                 result[i + 1] -= value
             else:
-                value = volume_corrections[i] * concentrations[i + 1] - volume_corrections[i+1] * fullness[i]
+                value = volume_corrections[i] * concentrations[i + 1] - volume_corrections[i + 1] * fullness[i]
                 result[i] += value
                 result[i + 1] -= value
 
         return result
+
     @property
     def corrected_crossing_rate(self):
         radius = self.radius
         R = self.cell_boundaries / radius
         viscosity_ratio = self.solution.viscosity(self.temperature) / self.environment.dynamic_viscosity
-        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (1 + viscosity_ratio) * (self.layers/100)
+        return crossing_rate(R, radius) * (self.relative_speed / 0.02) * (1 + 1e-3 / 1.81e-5) / (
+                1 + viscosity_ratio) * (self.layers / 100)
 
     @property
     def circulate(self):
         crossing_rates = self.corrected_crossing_rate
         result = np.zeros(self.layers)
-        for index,(m0,m1,rate) in enumerate(zip(self.layer_mass_particles,self.layer_mass_particles[1:],crossing_rates)):
-            value = self.layers*rate*(m0-m1)/self.radius
+        for index, (m0, m1, rate) in enumerate(
+                zip(self.layer_mass_particles, self.layer_mass_particles[1:], crossing_rates)):
+            value = self.layers * rate * (m0 - m1) / self.radius
             result[index] -= value
             result[index + 1] += value
         return result
@@ -252,9 +257,8 @@ class SuspensionDroplet(Droplet):
 
     def get_gradients(self, normalised_boundaries):
         concentrations = self.linear_layer_concentrations()
-        return np.array([(c2 - c0) / (r2 - r0) for r0, r2, c0, c2 in
-                         zip(normalised_boundaries[:-2], normalised_boundaries[2:], concentrations[:-2],
-                             concentrations[2:])])
+        return (concentrations[2:] - concentrations[:-2]) / (normalised_boundaries[2:] - normalised_boundaries[:-2])
+
     @property
     def diffuse(self):
         radius = self.radius
@@ -268,8 +272,6 @@ class SuspensionDroplet(Droplet):
             diffusion[i] += value
             diffusion[i + 1] -= value
         return diffusion
-
-
 
     def change_in_particles_mass(self):
         return (self.redistribute + self.diffuse) / self.layer_mass_particles
@@ -286,27 +288,30 @@ class SuspensionDroplet(Droplet):
     def virtual_droplet(self, x) -> Self:
         cell_boundaries, cell_velocities, layer_mass_particles, total_mass_solvent, temperature, velocity, position = self.split_state(
             x)
-        return SuspensionDroplet(self.solution, self.environment, self.gravity,self.stationary, temperature, velocity, position,
+        return SuspensionDroplet(self.solution, self.environment, self.gravity, self.stationary, temperature, velocity,
+                                 position,
                                  total_mass_solvent, cell_boundaries, cell_velocities, layer_mass_particles)
 
     def convert(self, mass_solvent):
-        return UniformDroplet(aqueous_NaCl, self.environment, self.gravity,self.stationary, self.environment.temperature, self.velocity,
+        return UniformDroplet(aqueous_NaCl, self.environment, self.gravity, self.stationary,
+                              self.environment.temperature, self.velocity,
                               self.position, mass_solvent, 0.0)
 
     def mass_solute(self) -> float:
         return 0.0
 
     def check_for_solidification(self):
-        return self.solution.critical_volume_fraction -  self.probe_concentration/self.solution.particle_density
+        return self.solution.critical_volume_fraction - self.probe_concentration / self.solution.particle_density
 
     @property
     def probe_concentration(self):
         linear_concentrations = self.linear_layer_concentrations()
-        radial_position = self.radius - 6 * self.solution.particle_radius
+        radial_position = self.radius - self.solution.critical_shell_thickness * self.solution.particle_radius
         positions = np.concatenate(([0], self.cell_boundaries, [self.radius]))
-        outer_index = np.max([np.argmax(positions>=radial_position),1])
-        m = (linear_concentrations[outer_index] - linear_concentrations[outer_index-1]) / (positions[outer_index] - positions[outer_index-1])
-        return linear_concentrations[outer_index] + (radial_position-positions[outer_index]) * m
+        outer_index = np.max([np.argmax(positions >= radial_position), 1])
+        m = (linear_concentrations[outer_index] - linear_concentrations[outer_index - 1]) / (
+                positions[outer_index] - positions[outer_index - 1])
+        return linear_concentrations[outer_index] + (radial_position - positions[outer_index]) * m
 
     def solver(self, dxdt, time_range, first_step, rtol, events):
         shell_formation = lambda time, x: self.virtual_droplet(x).check_for_solidification()

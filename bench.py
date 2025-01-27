@@ -11,9 +11,9 @@ from glob import glob
 from viscous_solution import ViscousSolution
 from water import water
 import pandas as pd
+from scipy.optimize import curve_fit
 
 gravity = np.array([0, 0, 0])
-
 
 def benchmark_droplet(droplet, label, efflorescence_threshold=0.45, efflorescence_termination=False):
     df = droplet.complete_trajectory(droplet.integrate(2,
@@ -276,7 +276,11 @@ def salt_data():
 
 
 def suspension_paper(Ts, RHs, R0s, silica_volume_fraction):
-    silica_suspension = silica(180e-9 / 2)
+    silica_suspension = silica(180e-9 / 2,
+                               critical_shell_thickness=6,
+                               critical_volume_fraction=np.pi/6,
+                               max_volume_fraction=1,
+                               rigidity=1)
     mass_fraction = silica_volume_fraction * 2200 / (
             (1 - silica_volume_fraction) * 1000 + silica_volume_fraction * 2200)
     for T, RH, R0 in zip(Ts, RHs, R0s):
@@ -284,7 +288,7 @@ def suspension_paper(Ts, RHs, R0s, silica_volume_fraction):
         suspension = SuspensionDroplet.from_mfp(silica_suspension,
                                                 Atmosphere(T, velocity=np.array([0.02, 0, 0]), relative_humidity=RH),
                                                 gravity, R0, mass_fraction, T, 100)
-        df = suspension.complete_trajectory(suspension.integrate(20))
+        df = suspension.complete_trajectory(suspension.integrate(40))
         print(np.max(df.time), np.min(df.radius))
         print()
         positions = []
@@ -307,19 +311,62 @@ def suspension_paper(Ts, RHs, R0s, silica_volume_fraction):
         plt.ylabel("Concentration / g/L")
         plt.show()
 
+def run(inputs,critical_shell_thickness):
+    print(critical_shell_thickness)
+    silica_suspension = silica(180e-9 / 2,
+                               critical_shell_thickness=critical_shell_thickness,
+                               max_volume_fraction=1,
+                               rigidity=1)
+    Ts,RHs,R0s,factors = inputs
+    print(len(Ts),len(RHs),len(R0s),len(factors))
+    result = []
+    silica_volume_fraction = 0.6/100
+    mass_fraction = silica_volume_fraction * 2200 / (
+            (1 - silica_volume_fraction) * 1000 + silica_volume_fraction * 2200)
+    for T,RH,R0 in zip(Ts,RHs,R0s):
+        print(T)
+        suspension = SuspensionDroplet.from_mfp(silica_suspension,
+                                                Atmosphere(T, velocity=np.array([0.02, 0, 0]), relative_humidity=RH),
+                                                gravity, R0, mass_fraction, T, 100)
+        df = suspension.complete_trajectory(suspension.integrate(40))
+        result.append(np.max(df.time))
+    print(result)
+    result = np.array(result)/factors
+    print(result)
+    return result
+
+def get_locking(inputs,T,RH,R0):
+    radii,volume_fraction = inputs
+    mass_fraction = volume_fraction * 2200 / ((1 - volume_fraction) * 1000 + volume_fraction * 2200)
+    result = []
+    for radius, mfp,vfp in zip(radii, mass_fraction,volume_fraction):
+        print(radius,vfp*100)
+        silica_suspension = silica(radius,critical_shell_thickness=500e-9/radius)
+        suspension = SuspensionDroplet.from_mfp(silica_suspension,
+                                                Atmosphere(T, velocity=np.array([0.02, 0, 0]), relative_humidity=RH),
+                                                gravity, R0, mfp, T, 100)
+        df = suspension.complete_trajectory(suspension.integrate(40))
+        result.append(np.max(df.time))
+        print(result[-1])
+        print()
+
+    print(result)
+
+def find_parameters():
+    Ts = np.array([263, 273, 282, 289, 294, 303, 311, 318, 326])
+    #Found RHs = np.array([1.9, 5.0, 6.5, 3.2, 4.8, 13.6, 3.8, 3.0, 7.3])
+    RHs = np.array([1.9, 5.0, 6.5, 3.2, 4.8, 5.0, 3.8, 3.0, 5.0])
+    RHs /= 100
+    R0s = np.array([30.93654, 28.4552, 30.75283, 30.74567, 28.75962, 26.53845, 29.03372, 30.01602, 31.56409])
+    R0s *= 1e-6
+    exp_times = np.array([11.55,5.58,4.00,2.89,2.26,1.31,1.24,1.04,0.87])
+    popt,pcov = curve_fit(run,(Ts,RHs,R0s,exp_times),exp_times/exp_times,6,bounds=(0,np.inf))
+
+def matrix():
+    radii = np.array([10.0,20.0,30.0,40.0,50.0,60.0,70.0,80.0,90.0,100.0,110.0,120.0,130.0,140.0,150.0,160.0,170.0,180.0,190.0,200.0]*20)*1e-9
+    volume_fraction = np.array([0.1]*20+[0.2]*20+[0.3]*20+[0.4]*20+[0.5]*20+[0.6]*20+[0.7]*20+[0.8]*20+[0.9]*20+[1.0]*20+
+    [1.1]*20+[1.2]*20+[1.3]*20+[1.4]*20+[1.5]*20+[1.6]*20+[1.7]*20+[1.8]*20+[1.9]*20+[2.0]*20)/100
+    get_locking((radii,volume_fraction),293,0.4,30e-6)
 
 if __name__ == '__main__':
-    Ts = [263, 273, 282, 289, 294, 303, 311, 318, 326]
-    RHs = np.array([1.9, 5.0, 6.5, 3.2, 4.8, 13.6, 3.8, 3.0, 7.3])
-    RHs /= 100
-    R0s = np.array([30.93654,
-                    28.4552,
-                    30.75283,
-                    30.74567,
-                    28.75962,
-                    26.53845,
-                    29.03372,
-                    30.01602,
-                    31.56409,])
-    R0s *= 1e-6
-    suspension_paper(Ts,RHs,R0s,0.6/100)
+    silica_bench(30.93654e-6,0.6/100,263,1.9e-2)

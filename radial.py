@@ -27,20 +27,6 @@ class RadialDroplet(Droplet):
     def refractive_index(self):
         return self.solution.refractive_index(self.mass_fraction_solute,self.temperature)
 
-    #@property
-    #def volume(self) -> float:
-    #    true_boundaries = np.concatenate(([0],self.cell_boundaries))
-    #    layer_volumes = np.array([4 / 3 * np.pi * (r1 ** 3 - r0 ** 3) for r0, r1 in zip(true_boundaries, true_boundaries[1:])])
-    #    average_layer_concentration = self.layer_mass_solute[:-1]/layer_volumes
-    #    layer_density = self.solution.concentration_to_solute_mass_fraction(average_layer_concentration)
-    #    layer_mass = layer_volumes*layer_density
-    #    layer_solvent_mass = layer_mass-self.layer_mass_solute[:-1]
-    #    outer_solvent = self.mass_solvent() - np.sum(layer_solvent_mass)
-    #    outer_mfs = self.layer_mass_solute[-1]/(self.layer_mass_solute[-1]+outer_solvent)
-    #    outer_density = self.solution.density(outer_mfs)
-    #    outer_volume = (outer_solvent+self.layer_mass_solute[-1])/outer_density
-    #    return np.sum(layer_volumes)+outer_volume
-
     @property
     def solute_sherwood_number(self) -> float:
         Sc = self.solution.viscosity(self.mass_fraction_solute,self.temperature) / (
@@ -126,10 +112,10 @@ class RadialDroplet(Droplet):
         mass = volume * solution.density(mass_fraction_solute)
         mass_solvent = (1 - mass_fraction_solute) * mass
         mass_solute = mass_fraction_solute * mass
-        cell_boundaries = radius*np.array([i/layers for i in range(1,layers)])
+        cell_boundaries = radius*np.arange(1,layers)/layers
         concentration = mass_solute/volume
         real_boundaries = np.concatenate(([0],cell_boundaries,[radius]))
-        log_mass_solute = np.log(np.array([4/3*np.pi*(r1**3-r0**3)*concentration for r0,r1 in zip(real_boundaries,real_boundaries[1:])]))
+        log_mass_solute = np.log(4/3*np.pi*(real_boundaries[1:]**3-real_boundaries[:-1]**3))
         cell_velocities = np.zeros(len(cell_boundaries))
         return RadialDroplet(solution,environment,gravity,stationary,temperature,velocity,position,mass_solvent,cell_boundaries,cell_velocities,log_mass_solute)
 
@@ -155,7 +141,7 @@ class RadialDroplet(Droplet):
 
     @property
     def deviation(self):
-        return self.cell_boundaries - self.radius*np.array([i/self.layers for i in range(1,self.layers)])
+        return self.cell_boundaries - self.radius*np.arange(1,self.layers)/self.layers
 
     def boundary_acceleration(self):
         return (-self.cell_velocities*damping-stiffness*self.deviation/self.radius)/layer_inertia
@@ -166,7 +152,7 @@ class RadialDroplet(Droplet):
     @property
     def layer_volume(self):
         true_boundaries = self.all_positions()
-        return np.array([4/3*np.pi*(r1**3-r0**3) for r0,r1 in zip(true_boundaries,true_boundaries[1:])])
+        return 4/3*np.pi*(true_boundaries[1:]**3-true_boundaries[:-1]**3)
 
     @property
     def average_layer_concentration(self):
@@ -223,16 +209,13 @@ class RadialDroplet(Droplet):
 
     def get_gradients(self,normalised_boundaries):
         concentrations = self.linear_layer_concentrations()
-        return np.array([(c2-c0)/(r2-r0) for r0,r2,c0,c2 in zip(normalised_boundaries[:-2],normalised_boundaries[2:],concentrations[:-2],concentrations[2:])])
-
-    def refractive_index(self):
-        return self.solution.refractive_index(self.mass_fraction_solute,self.temperature)
+        return (concentrations[2:]-concentrations[:-2])/(normalised_boundaries[2:]-normalised_boundaries[:-2])
 
     def change_in_solute_mass(self):
         radius = self.radius
         redistribute = self.redistribute()
         layer_diffusion= self.solution.diffusion(self.layer_mass_fraction_solute,self.temperature)
-        average_diffusion = [(d1+d2)/2 for d1,d2 in zip(layer_diffusion,layer_diffusion[1:])]
+        average_diffusion = (layer_diffusion+layer_diffusion[1:])/2
         normalised_boundaries = self.all_positions()/radius
         gradients = self.get_gradients(normalised_boundaries)
         diffusion = np.zeros(self.layers)
@@ -266,8 +249,7 @@ class RadialDroplet(Droplet):
             denominator = r14-r04+4/3*r0*(r03-r13)
             gradient = numerator/denominator
             c.append(gradient*(r1-r0)+c[-1])
-
-        return c
+        return np.array(c)
 
     def all_positions(self):
         return np.concatenate(([0],self.cell_boundaries,[self.radius]))
