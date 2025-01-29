@@ -368,5 +368,14 @@ def matrix():
     [1.1]*20+[1.2]*20+[1.3]*20+[1.4]*20+[1.5]*20+[1.6]*20+[1.7]*20+[1.8]*20+[1.9]*20+[2.0]*20)/100
     get_locking((radii,volume_fraction),293,0.4,30e-6)
 
+def water_test():
+    mfs = 0.03
+    sizes = np.logspace(-6,-5,10)
+    for size in sizes:
+        water_drop = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(293, 0.45),gravity,size,mfs,293)
+        trajectory = water_drop.complete_trajectory(water_drop.integrate(40,terminate_on_equilibration=True))
+        plt.plot(trajectory.time,trajectory.radius)
+    plt.show()
+
 if __name__ == '__main__':
-    silica_bench(30.93654e-6,0.6/100,263,1.9e-2)
+    water_test()

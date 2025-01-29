@@ -45,6 +45,7 @@ class UniformDroplet(Droplet):
 
         Args:
             solution: parameters describing solvent+solute
+            solution: parameters describing solvent+solute
             environment: parameters of gas surrounding droplet
             gravity: body acceleration in metres/second^2 (3-dimensional vector)
             radius: in metres

@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from typing import Union
 from typing_extensions import Self
 import numpy as np
 import pandas as pd
@@ -15,7 +16,7 @@ class Droplet(ABC):
     """Abstract class completely describes the state of the droplet during its evolution.
     """
 
-    solution: Solution | ViscousSolution
+    solution: Union[Solution, ViscousSolution]
     environment: Environment
     gravity: np.array  # m/s^2
     stationary: bool
@@ -389,7 +390,7 @@ class Droplet(ABC):
             efflorescing.terminal = True
             events += [efflorescing]
 
-        too_small = lambda time,x: self.virtual_droplet(x).radius - 2.0e-6
+        too_small = lambda time,x: self.virtual_droplet(x).radius - 5.0e-7
         too_small.terminal = True
         events += [too_small]
 
