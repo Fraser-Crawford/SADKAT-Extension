@@ -3,12 +3,23 @@ from dataclasses import dataclass, field
 import chemicals
 import numpy as np
 from fluids.constants import gas_constant
-
+from numba.experimental import jitclass
+from numba import float64, jit
 from solvent import Solvent
 from water import water
 
+spec = [
+    ("velocity", float64[:]),
+    ("molar_mass",float64),
+    ("pressure",float64),
+    ("temperature",float64),
+    ("relative_humidity",float64),
+    ("specific_heat_capacity",float64),
+    ("thermal_conductivity",float64),
+    ("dynamic_viscosity",float64),
+]
 
-@dataclass
+@jitclass
 class Environment:
     """Class to conveniently store all parameters needed to describe the surrounding gas together."""
 
@@ -20,7 +31,17 @@ class Environment:
     specific_heat_capacity: float   # J/kg/K
     thermal_conductivity: float     # J/s/m/K
     dynamic_viscosity: float        # kg/m/s
-    velocity: np.array=field(default_factory=lambda: np.zeros(3))  # m/s
+
+    def __init__(self,solvent,molar_mass,pressure,temperature,relative_humidity,specific_heat_capacity,thermal_conductivity,dynamic_viscosity,velocity=np.zeros(3)):
+        self.solvent=solvent
+        self.molar_mass=molar_mass
+        self.pressure=pressure
+        self.temperature=temperature
+        self.relative_humidity=relative_humidity
+        self.specific_heat_capacity=specific_heat_capacity
+        self.thermal_conductivity=thermal_conductivity
+        self.dynamic_viscosity=dynamic_viscosity
+        self.velocity=velocity
 
     @property
     def density(self):
@@ -52,6 +73,7 @@ molar_mass_dry_air = 28.9647
 specific_heat_capacity_air = lambda T: 1.006e3 # J/kg/K
 dynamic_viscosity_air = lambda T: chemicals.viscosity.mu_air_lemmon(T, molar_density_air(T)) # kg/m/s
 
+@jit
 def Atmosphere(temperature,
                relative_humidity=0,
                pressure=101325,

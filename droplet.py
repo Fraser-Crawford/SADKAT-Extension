@@ -8,14 +8,25 @@ from environment import Environment
 from fit import kelvin_effect
 from solution import Solution
 from viscous_solution import ViscousSolution
+from numba.experimental import jitclass
+from numba import float64, boolean
+from numba import jit
 
+spec = [
+    ("gravity", float64[:]),
+    ("stationary", boolean),
+    ("temperature", float64[:]),
+    ("velocity", float64[:]),
+    ("position", float64[:]),
+]
 
+@jitclass(spec)
 @dataclass
 class Droplet(ABC):
     """Abstract class completely describes the state of the droplet during its evolution.
     """
 
-    solution: Solution | ViscousSolution
+    solution: Solution
     environment: Environment
     gravity: np.array  # m/s^2
     stationary: bool
@@ -47,7 +58,7 @@ class Droplet(ABC):
 
         T_inf = self.environment.temperature
         T = self.temperature
-        D_inf = D_function(T_inf)
+        D_inf = D_function.get(T_inf)
 
         # Apply temperature correction to diffusion coefficient appearing in mass flux.
         eps = 1e-8
@@ -252,7 +263,7 @@ class Droplet(ABC):
         """Non-dimensional number describing the ratio of momentum diffusivity to mass diffusivity."""
         D_function = self.solution.solvent.vapour_binary_diffusion_coefficient
         T_inf = self.environment.temperature
-        D_inf = D_function(T_inf)
+        D_inf = D_function.get(T_inf)
         return self.environment.dynamic_viscosity / (self.environment.density * D_inf)
 
     @property

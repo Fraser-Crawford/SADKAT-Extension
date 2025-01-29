@@ -3,7 +3,18 @@ from dataclasses import dataclass
 import numpy as np
 from fluids.constants import gas_constant
 import scipy
-@dataclass
+from numba.experimental import jitclass
+from numba import float64, boolean, int32, optional, jit
+import numba
+
+spec = [
+    ("D_ref",float64),
+    ("T_ref",float64),
+    ("lam",float64),
+]
+
+
+@jitclass(spec)
 class VapourBinaryDiffusionCoefficient:
     """Standard fitting function to describe the temperature dependence
     of the binary diffusion coeffient for evaporated solvent in air.
@@ -13,17 +24,21 @@ class VapourBinaryDiffusionCoefficient:
     D_ref: float  # m^2/s
     T_ref: float  # K
     lam: float  # unitless, scaling parameter
-
-    def __call__(self, T):
+    def __init__(self, D_ref: float, T_ref: float, lam: float):
+        self.D_ref = D_ref
+        self.T_ref = T_ref
+        self.lam = lam
+    def get(self,T):
         """Fit itself.
 
-        Args:
-            T: temperature in Kelvin.
-        Returns:
-            The diffusion coefficient in m^2/s.
-        """
+                Args:
+                    T: temperature in Kelvin.
+                Returns:
+                    The diffusion coefficient in m^2/s.
+                """
         return self.D_ref * (T / self.T_ref) ** self.lam
 
+@jit
 def surface_tension(A, B, C, D, E, T_crit, T):
     """Surface tension fitting function (as function of temperature).
 

@@ -1,10 +1,15 @@
+from numba import jit
+
 from solvent import Solvent
 import chemicals
 import numpy as np
 from fit import surface_tension,VapourBinaryDiffusionCoefficient
+import numpy.typing as npt
 
-molar_mass_water = 2 * chemicals.periodic_table.H.MW + chemicals.periodic_table.O.MW  # g/mol
-def density_water(temperature):
+molar_mass_water:float = 2 * chemicals.periodic_table.H.MW + chemicals.periodic_table.O.MW  # g/mol
+
+@jit
+def density_water(temperature:npt.NDArray[np.float_])->npt.NDArray[np.float_]:
     """Fit for the density of pure water used in J Walker model.
 
     Originally from:
@@ -29,15 +34,18 @@ def density_water(temperature):
 
     return density
 
-
 # IAPWS-95 https://chemicals.readthedocs.io/chemicals.iapws.html
-specific_heat_capacity_water = np.vectorize(
-    lambda T: chemicals.iapws.iapws95_properties(T, 101325)[5])  # J/kg/K
+@jit
+def specific_heat_capacity_water(T:float)->float:
+    return 4.1844
 
 # Su, PCCP (2018)
-specific_latent_heat_water = lambda T: 3.14566e6 - 2361.64 * T  # J/kg
+@jit
+def specific_latent_heat_water(T:float)->float:
+    return 3.14566e6 - 2361.64 * T
 
 
+@jit
 def equilibrium_vapour_pressure_water(T):
     """Using the Buck equation (from integrating the Clausius-Clapeyron equation).
 
@@ -49,7 +57,7 @@ def equilibrium_vapour_pressure_water(T):
     T_C = T - 273.15  # Celsius
     return 1e3 * 0.61161 * np.exp((18.678 - (T_C / 234.5)) * (T_C / (257.14 + T_C)))  # Pa
 
-
+@jit
 def surface_tension_water(T):
     """Surface tension of water as a function of temperature.
 

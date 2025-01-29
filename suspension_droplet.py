@@ -9,17 +9,20 @@ from scipy.integrate import solve_ivp
 from typing_extensions import Self
 from droplet import Droplet
 from uniform import UniformDroplet
+from numba.experimental import jitclass
+from numba import float64
+from numba import jit
 
 layer_inertia = 1
 stiffness = 100
 damping = 2.0 * np.sqrt(stiffness * layer_inertia)
 
-
+@jit
 def reverse_planck(x, a, b, c, d):
     X = x - 1
     return a * (-X) ** b / (np.exp(-c * X) - 1) + d * X ** 2
 
-
+@jit
 def crossing_rate(normalised_boundaries: npt.NDArray[np.float_], radius: float) -> npt.NDArray[np.float_]:
     a_poly = np.poly1d([2.19783107e-04, -3.51635586e-02, 2.38920835e+00, -8.93283977e+01,
                         1.98888346e+03, -2.66112346e+04, 2.05816461e+05, -8.23708581e+05,
@@ -36,7 +39,15 @@ def crossing_rate(normalised_boundaries: npt.NDArray[np.float_], radius: float) 
     return reverse_planck(normalised_boundaries, a_poly(radius * 1e6), b_poly(radius * 1e6), c_poly(radius * 1e6),
                           d_poly(radius * 1e6)) / 2
 
+spec = [
+    ("solution", Suspension),
+    ("total_mass_solvent", float64),
+    ("cell_boundaries", float64[:]),
+    ("cell_velocities", float64[:]),
+    ("log_mass_particles", float64[:]),
+]
 
+@jitclass(spec)
 @dataclass
 class SuspensionDroplet(Droplet):
 
