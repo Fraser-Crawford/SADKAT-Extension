@@ -7,7 +7,7 @@ import numpy.typing as npt
 
 def aqueous_NaCl_diffusion(mfs:float | npt.NDArray[np.float_], temperature):
     D_0=1e-9*(1.955 - 20.42*mfs + 141.7*mfs**2 - 539.8*mfs**3 + 995.6*mfs**4 - 698.7*mfs**5)
-    water_viscosity = lambda T : -1.748e-5*(temperature-273)+1.336e-3
+    water_viscosity = lambda T : -1.748e-5*(T-273)+1.336e-3
     return D_0*temperature/293*water_viscosity(293)/water_viscosity(temperature)
 
 viscous_aqueous_NaCl = ViscousSolution(water,

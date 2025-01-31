@@ -377,5 +377,14 @@ def water_test():
         plt.plot(trajectory.time,trajectory.radius)
     plt.show()
 
+def rust_benchmark():
+    mfs = 0.0
+    sizes = [30e-6]
+    for size in sizes:
+        water_drop = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(293, 0.45),gravity,size,mfs,293)
+        trajectory = water_drop.complete_trajectory(water_drop.integrate(40,terminate_on_equilibration=True))
+        plt.plot(trajectory.time,trajectory.radius)
+    plt.show()
+
 if __name__ == '__main__':
-    water_test()
+    rust_benchmark()
