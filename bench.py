@@ -1,5 +1,11 @@
-from environment import Atmosphere
+import time
+from cProfile import label
+from dataclasses import dataclass
+
+import suspension
+from environment import Atmosphere, thermal_conductivity_air
 from radial import RadialDroplet
+from rust import RustDroplet, DataDroplet
 from solution_definitions import aqueous_NaCl
 from suspension import test_suspension, silica, dummy_density
 from suspension_droplet import SuspensionDroplet, crossing_rate
@@ -12,7 +18,6 @@ from viscous_solution import ViscousSolution
 from water import water
 import pandas as pd
 from scipy.optimize import curve_fit
-
 gravity = np.array([0, 0, 0])
 
 def benchmark_droplet(droplet, label, efflorescence_threshold=0.45, efflorescence_termination=False):
@@ -335,23 +340,6 @@ def run(inputs,critical_shell_thickness):
     print(result)
     return result
 
-def get_locking(inputs,T,RH,R0):
-    radii,volume_fraction = inputs
-    mass_fraction = volume_fraction * 2200 / ((1 - volume_fraction) * 1000 + volume_fraction * 2200)
-    result = []
-    for radius, mfp,vfp in zip(radii, mass_fraction,volume_fraction):
-        print(radius,vfp*100)
-        silica_suspension = silica(radius,critical_shell_thickness=500e-9/radius)
-        suspension = SuspensionDroplet.from_mfp(silica_suspension,
-                                                Atmosphere(T, velocity=np.array([0.02, 0, 0]), relative_humidity=RH),
-                                                gravity, R0, mfp, T, 100)
-        df = suspension.complete_trajectory(suspension.integrate(40))
-        result.append(np.max(df.time))
-        print(result[-1])
-        print()
-
-    print(result)
-
 def find_parameters():
     Ts = np.array([263, 273, 282, 289, 294, 303, 311, 318, 326])
     #Found RHs = np.array([1.9, 5.0, 6.5, 3.2, 4.8, 13.6, 3.8, 3.0, 7.3])
@@ -377,14 +365,456 @@ def water_test():
         plt.plot(trajectory.time,trajectory.radius)
     plt.show()
 
-def rust_benchmark():
-    mfs = 0.0
-    sizes = [30e-6]
-    for size in sizes:
-        water_drop = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(293, 0.45),gravity,size,mfs,293)
-        trajectory = water_drop.complete_trajectory(water_drop.integrate(40,terminate_on_equilibration=True))
-        plt.plot(trajectory.time,trajectory.radius)
+def rust_test():
+    concentration = 200
+    mfs = aqueous_NaCl.concentration_to_solute_mass_fraction(concentration)
+    for i in range(1,101,10):
+        droplet = RustDroplet("aqueous_NaCl","silica",i,293,0.45,0.0,90e-9)
+        trajectory = droplet.integrate(40,30e-6,concentration,0.0,terminate_on_equilibration=True)
+        df = droplet.complete_trajectory(trajectory)
+        plt.plot(df.time,df.radius,label=f"Rust {i} layers")
+        print()
+    for i in range(1):
+        droplet = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(293, 0.45),gravity,30e-6,mfs,293)
+        trajectory = droplet.integrate(40,terminate_on_equilibration=True)
+    df = droplet.complete_trajectory(trajectory)
+    plt.plot(df.time, df.radius,label="Python")
+    plt.legend()
+    plt.xlabel("Time (s)")
+    plt.ylabel("Radius (m)")
+    plt.show()
+
+def rust_test2():
+    mfs = aqueous_NaCl.concentration_to_solute_mass_fraction(100)
+    start = time.time()
+    for i in range(1):
+        droplet = RustDroplet("aqueous_NaCl","silica",1,293,0.45,0.0,90e-9)
+        trajectory = droplet.integrate(5,30e-6,100,0.0,terminate_on_equilibration=True)
+    plt.plot(trajectory.t,trajectory.y[1],label="Rust")
+    print(time.time() - start)
+    start = time.time()
+    for i in range(1):
+        droplet = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(293, 0.45),gravity,30e-6,mfs,293)
+        trajectory = droplet.integrate(5,terminate_on_equilibration=True)
+    print(time.time() - start)
+    df = droplet.complete_trajectory(trajectory)
+    plt.plot(df.time, df.temperature,label="Python")
+    plt.legend()
+    plt.xlabel("Time (s)")
+    plt.ylabel("Temperature (K)")
+    plt.show()
+
+def rust_test3():
+    print()
+    mfs = aqueous_NaCl.concentration_to_solute_mass_fraction(100)
+    for i in range(1):
+        droplet = RustDroplet("aqueous_NaCl","silica",1,293,0.45,0.0,90e-9)
+        trajectory = droplet.integrate(5,30e-6,100,0.0,terminate_on_equilibration=True)
+    plt.plot(np.exp(trajectory.y[0]),trajectory.y[-2],label="Rust")
+    plt.show()
+    for i in range(1):
+        droplet = UniformDroplet.from_mfs(aqueous_NaCl, Atmosphere(293, 0.45),gravity,30e-6,mfs,293)
+        trajectory = droplet.integrate(5,terminate_on_equilibration=True)
+        print(droplet.mass_solute())
+    df = droplet.complete_trajectory(trajectory)
+    plt.plot(df.mass_solvent, df.radius*1e6,label="Python")
+    plt.legend()
+    plt.xlabel("Mass of solvent (kg)")
+    plt.ylabel("Radius (um)")
+    plt.show()
+
+def diffusion_test():
+    mfs = viscous_aqueous_NaCl.concentration_to_solute_mass_fraction(10)
+    droplet = RadialDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(293, 0.45),gravity,30e-6,mfs,293,10)
+    print(droplet.layer_mass_solute)
+    print(droplet.change_in_solute_mass())
+
+def vapour_comparison():
+    T = np.linspace(260,300,100)
+    plt.plot(T,water.equilibrium_vapour_pressure(T))
+    def equilibrium_vapour_pressure_water(temperature):
+        T_C = temperature - 273.15
+        return 1e3 * 0.61161 * np.exp((18.678 - (T_C / 234.5)) * (T_C / (257.14 + T_C)))
+    plt.plot(T,equilibrium_vapour_pressure_water(T))
+    plt.show()
+
+def heat_cap_difference():
+    T = np.linspace(274, 360, 100)
+    y = water.specific_heat_capacity(T)
+    c = np.polyfit(T,y,6)
+    print(c)
+    y_prime = np.poly1d(c)(T)
+    plt.plot(T,y)
+    plt.plot(T,y_prime)
+    plt.show()
+
+def thermal_conductivity():
+    T = np.linspace(274, 360, 100)
+    y = thermal_conductivity_air(T)
+    c = np.polyfit(T, y, 1)
+    print(c)
+    y_prime = np.poly1d(c)(T)
+    plt.plot(T, y)
+    plt.plot(T, y_prime)
+    plt.show()
+
+def density_diff():
+    mfs = np.linspace(0,100,101)
+    density = aqueous_NaCl.density(mfs)
+    def density_rust(mfs):
+        return np.poly1d([-940.62808, 2895.88613, -2131.05669, 1326.69542, -55.33776, 998.2])(np.sqrt(mfs))
+    density_prime = density_rust(mfs)
+    plt.plot(mfs, density)
+    plt.plot(mfs, density_prime)
+    plt.show()
+
+def GregsonTest():
+    Ts = [293,308,318]
+    mfs = 0.01
+    concentration = aqueous_NaCl.concentration(mfs)
+    for T in Ts:
+        print(T)
+        droplet = RustDroplet("aqueous_NaCl","silica",10,T,0.0,0.0,90e-9)
+        trajectory = droplet.integrate(40.0,24e-6,concentration,0.0,terminate_on_efflorescence=True,eff_threshold=0.45)
+        df = droplet.complete_trajectory(trajectory)
+        plt.plot(df.time, df.radius, label=T)
+        droplet = UniformDroplet.from_mfs(aqueous_NaCl,Atmosphere(T),gravity,24e-6,mfs,T)
+        trajectory = droplet.integrate(40.0, terminate_on_efflorescence=True,eff_threshold=0.45)
+        df = droplet.complete_trajectory(trajectory)
+        plt.plot(df.time, df.radius, label=f"{T} Uniform",linestyle="--")
+    plt.legend()
+    plt.show()
+
+def layer_test():
+    concentration = 25
+    mfs = aqueous_NaCl.concentration_to_solute_mass_fraction(concentration)
+    T = 313
+    rh = 0.1
+
+    layers = [10,20,40,60,80,100]
+
+    for layer in layers:
+        start = time.time()
+        droplet = RustDroplet("aqueous_NaCl", "silica", layer, T, rh, 0.0, 90e-9)
+        trajectory = droplet.integrate(40.0, 24e-6, concentration, 0.0,terminate_on_efflorescence=True,eff_threshold=0.45)
+        print(trajectory.message)
+        df = droplet.complete_trajectory(trajectory)
+        timer = time.time() - start
+        plt.plot(df.time,df.radius,label=f"Rust {layer} layers, {timer:.2f} s")
+
+    start = time.time()
+    droplet = RadialDroplet.from_mfs(viscous_aqueous_NaCl,Atmosphere(T,rh),gravity,24e-6,mfs,T,10)
+    trajectory = droplet.integrate(40.0,terminate_on_efflorescence=True, eff_threshold=0.45)
+    print(trajectory.message)
+    df = droplet.complete_trajectory(trajectory)
+    timer = time.time() - start
+    plt.plot(df.time, df.radius, linestyle="--",label=f"Radial 10 layers, {timer:.2f} s")
+
+    start = time.time()
+    droplet = UniformDroplet.from_mfs(viscous_aqueous_NaCl, Atmosphere(T, rh), gravity, 24e-6, mfs, T)
+    trajectory = droplet.integrate(40.0, terminate_on_efflorescence=True, eff_threshold=0.45)
+    print(trajectory.message)
+    df = droplet.complete_trajectory(trajectory)
+    timer = time.time() - start
+    plt.plot(df.time, df.radius, linestyle="-.",label=f"Uniform, {timer:.2f} s")
+    plt.legend()
+    plt.ylabel("Droplet Radius / m")
+    plt.xlabel("Time / s")
+    plt.title(f"Parity Results from Rust Vs. Old methods\nT = {T}, relative humidity = {rh*100}%, C = {concentration} g/L")
+    plt.show()
+
+def get_locking(inputs,T,RH,R0):
+    radii,volume_fraction = inputs
+    mass_fraction = volume_fraction * 2200 / ((1 - volume_fraction) * 1000 + volume_fraction * 2200)
+    result = []
+    for radius, mfp,vfp in zip(radii, mass_fraction,volume_fraction):
+        print(radius,vfp*100)
+        silica_suspension = silica(radius,critical_shell_thickness=500e-9/radius)
+        suspension = SuspensionDroplet.from_mfp(silica_suspension,
+                                                Atmosphere(T, velocity=np.array([0.02, 0, 0]), relative_humidity=RH),
+                                                gravity, R0, mfp, T, 100)
+        df = suspension.complete_trajectory(suspension.integrate(40))
+        result.append(np.max(df.time))
+        print(result[-1])
+        print()
+    print(result)
+
+def locking_rust_temperature():
+    Ts = np.array([263, 273, 282, 289, 294, 303, 311, 318, 326])
+    N = len(Ts)
+    R0s = np.array([30.93654, 28.4552, 30.75283, 30.74567, 28.75962, 26.53845, 29.03372, 30.01602, 31.56409])
+    R0s *= 1e-6
+    RHs = [0,0.1]
+    exp_times = np.array([11.55, 5.58, 4.00, 2.89, 2.26, 1.31, 1.24, 1.04, 0.87])
+    concentration = 0.6/100*2200
+    print(concentration)
+    plt.scatter(Ts,exp_times, label="Experimental")
+    for RH in RHs:
+        y = []
+        input_rh = [RH]*N
+        for T, rh, R0, exp_time in zip(Ts, input_rh, R0s,exp_times):
+            print(T,rh,R0)
+            droplet = RustDroplet("aqueous_NaCl", "silica",100, T, rh, 0.03, 90e-9)
+            trajectory = droplet.integrate(40.0, R0, 0.0, concentration,
+                                           terminate_on_locking=True,locking_threshold=300.0e-9)
+            print(trajectory.message)
+            y += [trajectory.t_events[0][0]]
+            print(f"{trajectory.t_events[0][0]:.2f} s modelled, {exp_time:.2f} s measured")
+            print()
+        plt.plot(Ts,y,label=f"RH = {RH:.1f}")
+    plt.legend()
+    plt.xlabel("Temperature / K")
+    plt.ylabel("Locking Point Time / s")
+    plt.show()
+
+def locking_rust_rh():
+    RHs = np.array([0,10,20,30,40,50,60,70,80,90])
+    N = len(RHs)
+    R0s = np.array([29.12481,
+28.84665,
+28.8417,
+28.84905,
+28.8639,
+28.49274,
+28.85276,
+28.73958,
+28.79753,
+29.09102
+])
+    R0s *= 1e-6
+    T = 294
+    exp_times = np.array([1.91984,
+2.13332,
+2.49858,
+2.96926,
+3.6114,
+4.68208,
+6.02246,
+9.05544,
+14.52697,
+33.87833
+])
+    concentration = 0.5 / 100 * 2200
+    print(concentration)
+    plt.scatter(RHs, exp_times, label="Experimental")
+
+    RH_minus = RHs - 5
+    #RH_minus[RH_minus < 0] = 0
+    y = []
+    for rh, R0, exp_time in zip(RH_minus, R0s, exp_times):
+        print(T, rh, R0)
+        droplet = RustDroplet("aqueous_NaCl", "silica", 100, T, rh/100, 0.03, 90e-9)
+        trajectory = droplet.integrate(100.0, R0, 0.0, concentration,
+                                       terminate_on_locking=True, locking_threshold=300.0e-9)
+        print(trajectory.message)
+        y += [trajectory.t_events[0][0]]
+        print(f"{trajectory.t_events[0][0]:.2f} s modelled, {exp_time:.2f} s measured")
+        print()
+    x = np.arange(0,100,10)
+    plt.plot(x, y, label=f"RH - 5%")
+
+    RH_plus = RHs + 5
+    y = []
+    for rh, R0, exp_time in zip(RH_plus, R0s, exp_times):
+        print(T, rh, R0)
+        droplet = RustDroplet("aqueous_NaCl", "silica", 100, T, rh/100, 0.03, 90e-9)
+        trajectory = droplet.integrate(100.0, R0, 0.0, concentration,
+                                       terminate_on_locking=True, locking_threshold=300.0e-9)
+        print(trajectory.message)
+        y += [trajectory.t_events[0][0]]
+        print(f"{trajectory.t_events[0][0]:.2f} s modelled, {exp_time:.2f} s measured")
+        print()
+    plt.plot(x, y, label=f"RH + 5%")
+    plt.legend()
+    plt.xlabel("Relative Humidity / %")
+    plt.ylabel("Locking Point Time / s")
+    #plt.yscale("log")
+    plt.show()
+
+def test_particle_concentrations():
+    concentration = 2.0 / 100 * 2200
+    layers = 100
+    droplet = RustDroplet("aqueous_NaCl", "silica", layers, 293, 0.0, 1.0, 90e-9)
+    trajectory = droplet.integrate(40.0, 30e-6, 0.0, concentration,
+                                   terminate_on_locking=True, locking_threshold=300.0e-9)
+    df = droplet.complete_trajectory(trajectory)
+    print(trajectory.message)
+    print(np.max(df.time))
+    for boundaries,concentrations in zip(df.true_boundaries,df.layer_particle_concentrations):
+        plt.step(boundaries[:-1],concentrations)
+    plt.show()
+
+    for boundaries,concentrations in zip(df.true_boundaries,df.layer_concentrations):
+        plt.step(boundaries[:-1],concentrations)
+    plt.show()
+
+def test_solute_concentrations():
+    layers=100
+    droplet = RustDroplet("aqueous_NaCl", "silica", layers, 293, 0.0, 0.0, 90e-9)
+    trajectory = droplet.integrate(40.0, 30e-6, 25, 0.0
+                                   ,terminate_on_efflorescence=True,eff_threshold=0.45)
+    print(trajectory.message)
+    df = droplet.complete_trajectory(trajectory)
+    print(np.max(df.time))
+    for boundaries, concentrations in zip(df.true_boundaries, df.layer_concentrations):
+        plt.step(boundaries,np.concatenate(([concentrations[0]],concentrations)))
+    plt.show()
+
+    for i in range(layers-1):
+        plt.plot(df.time,[position[i] for position in df.layer_positions])
+    plt.plot(df.time,df.radius)
+    plt.show()
+
+    for i in range(0,10):
+        plt.plot(df.time,[concentrations[i] for concentrations in df.layer_concentrations])
+    plt.show()
+
+    for i in range(0,layers-1):
+        plt.plot(df.time,[concentrations[i] for concentrations in df.layer_particle_concentrations],label=i)
+    plt.legend()
+    plt.show()
+
+def test_air_flow_time():
+    Us = np.linspace(0.0,30.0,31)
+    concentration = 0.6 / 100 * 2200
+    layers = 100
+    times = []
+    for U in Us:
+        print(U)
+        droplet = RustDroplet("aqueous_NaCl", "silica", layers, 293, 1.0, U, 90e-9)
+        trajectory = droplet.integrate(40.0, 30e-6, 0.0, concentration,
+                                       terminate_on_locking=True, locking_threshold=300.0e-9)
+        df = droplet.complete_trajectory(trajectory)
+        times.append(np.max(df.time))
+    plt.plot(Us,times)
+    plt.xlabel("Air flow speed / ms-1")
+    plt.ylabel("Locking point time / s")
+    plt.title("Air flow speed vs. locking point time\n 293 K, 0% RH, silica NP")
+    plt.show()
+
+def test_air_flow_size():
+    Us = np.linspace(0.0,30.0,31)
+    concentration = 0.6 / 100 * 2200
+    layers = 50
+    radii = []
+    for U in Us:
+        print(U)
+        droplet = RustDroplet("aqueous_NaCl", "silica", layers, 293, 0.5, U, 65e-9)
+        trajectory = droplet.integrate(40.0, 30e-6, 0.0, concentration,
+                                       terminate_on_locking=True, locking_threshold=100.0e-9)
+        df = droplet.complete_trajectory(trajectory)
+        radii.append(np.min(df.radius))
+    plt.plot(Us,radii)
+    plt.xlabel("Air flow speed / ms-1")
+    plt.ylabel("Locking point radius / m")
+    plt.title("Air flow speed vs. locking point radius\n 293 K, 0% RH, silica NP")
+    plt.show()
+
+def convection_fitting():
+    from glob import glob
+    shell_thickness = 500e-9
+    directory = fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\200 sccm\Droplets"
+    files = glob(fr"{directory}\*.csv")
+    results = [pd.read_csv(f"{file}") for file in files]
+    for droplet in results:
+        plt.scatter(droplet.relative_time, droplet.radius*1e-6, s=3,c="blue",marker="x")
+    directory = fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\100 sccm\Droplets"
+    files = glob(fr"{directory}\*.csv")
+    results = [pd.read_csv(f"{file}") for file in files]
+    for droplet in results:
+        plt.scatter(droplet.relative_time, droplet.radius * 1e-6, s=2, c="red")
+
+    Us = [0.0,0.5]
+    cs = ["red","black"]
+    concentration = 2.0 / 100 * 2200
+    max_times = []
+    min_radii = []
+    for U,c in zip(Us,cs):
+        print(U)
+
+        droplet = RustDroplet("aqueous_NaCl", "silica", 100, 273.15+17.66, 0.46, U, 65e-9)
+        trajectory = droplet.integrate(40.0, 24e-6, 0.0, concentration,
+                                       terminate_on_locking=True, locking_threshold=shell_thickness)
+
+        print(trajectory.message)
+        df = droplet.complete_trajectory(trajectory)
+        plt.plot(df.time,df.radius,label=f"{U:.1f} m/s",c=c,linewidth=3,alpha=0.5)
+        max_times.append(np.max(df.time))
+        min_radii.append(np.min(df.radius))
+    plt.scatter(max_times, min_radii, marker="o", s=200, c="black", zorder=9)
+    plt.scatter(max_times,min_radii,marker="o",s=100,c="orange",zorder=10)
+    plt.xlabel("Time / s")
+    plt.ylabel("Droplet Radius / m")
+    plt.title(f"Convectional Mixing at 45% RH, 17.7 C \n Shell thickness = {shell_thickness*1e9:.0f} nm")
+    plt.xlim(0,4.0)
+    plt.ylim(0,30e-6)
+    plt.legend()
+    plt.show()
+
+def diffusion_fitting():
+    layers = 50
+    r0 = 15e-6
+    Us = np.linspace(0.1,2,20)
+    R = np.linspace(0,1.0,layers)
+    Ds = []
+    for U in Us:
+        print(U)
+        droplet = RustDroplet("aqueous_NaCl", "silica", layers, 273.15 + 20, 0.5, U, 500e-9)
+        trajectory = droplet.integrate(40.0, r0, 0.0, 2.0 / 100 * 2200,
+                                       terminate_on_locking=True, locking_threshold=300e-9)
+        print(trajectory.message)
+        df = droplet.complete_trajectory(trajectory)
+        mask = df.time > 0.5
+        coeff = np.polyfit(np.array(df.time[mask],dtype=float),np.array((df.radius[mask]*2)**2,dtype=float),1)
+        kappa = -coeff[0]
+
+        for index,time in enumerate(df.time):
+            if time > 1.0:
+                concentration_profile = df.layer_particle_concentrations[index]
+                break
+        coeff = np.polyfit(R[:int(0.8*layers)]**2,np.log(concentration_profile[:int(0.8*layers)]),1)
+        Pe = coeff[0]*2
+        D = kappa/(8*Pe) - 1.38e-23*293.15/(6*np.pi*1e-3*500e-9)
+        Ds.append(D)
+    plt.scatter(Us,Ds,label="Extracted")
+    plt.plot(Us,2/9*r0*Us/(2*np.pi**2*np.log(2)*(2+np.pi)*(1+1000/18.13)),linestyle="--",label="A=2/9")
+    plt.plot(Us, 1 / 9 * r0 * Us / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
+             label="A=1/9")
+    plt.plot(Us, 2/27 * r0 * Us / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
+             label="A=2/27")
+    plt.plot(Us, 1 / 27 * r0 * Us / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
+             label="A=1/27")
+    plt.legend()
+    plt.xlabel("Air Flow Speed / m s-1")
+    plt.ylabel("Diffusion Coefficient / m2 s-1")
+    plt.show()
+
+def different_sizes_convection():
+    rps = np.logspace(-10,-6,40)
+    particle_sizes = [30.5e-9/2,86.1e-9/2,121.5e-9/2]
+    volumes = []
+    for rp in rps:
+        print(rp)
+        droplet = RustDroplet("aqueous_NaCl", "silica", 50, 273.15 + 20, 0.46, 0.5, rp)
+        trajectory = droplet.integrate(40.0, 23e-6, 0.0, 1.0 / 100 * 2200,
+                                       terminate_on_locking=True, locking_threshold=400e-9)
+        print(trajectory.message)
+        df = droplet.complete_trajectory(trajectory)
+        volumes.append(np.min(df.radius/23e-6)**3)
+    plt.plot(rps,np.array(volumes))
+    plt.scatter(particle_sizes,np.interp(particle_sizes,rps,volumes))
+    plt.xlabel("Nanoparticle Radius / m")
+    plt.ylabel("Fraction of Volume Remaining")
+    plt.xscale("log")
+    plt.title("How Nanoparticle Radius Affects Locking Point at 0.5 m/s Airflow")
+    plt.show()
+
+def test():
+    droplet = UniformDroplet.from_mfs(aqueous_NaCl,Atmosphere(293,0.95),np.array([0,0,-9.81]),30e-6,0.0001,293,np.array([1,0,0]),stationary=False)
+    trajectory = droplet.integrate(100,terminate_on_equilibration=True)
+    state = droplet.complete_trajectory(trajectory)
+    plt.plot(state.time,state.radius)
     plt.show()
 
 if __name__ == '__main__':
-    rust_benchmark()
+    test()

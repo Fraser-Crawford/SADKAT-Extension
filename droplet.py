@@ -57,7 +57,6 @@ class Droplet(ABC):
         else:
             C = (T_inf - T) / T_inf ** (lam - 1) * (2 - lam) / (T_inf ** (2 - lam) - T ** (2 - lam))
         D_eff = C * D_inf
-
         I = np.log((self.environment.pressure - self.vapour_pressure) /
                    (self.environment.pressure - self.environment.vapour_pressure))
 
@@ -126,6 +125,7 @@ class Droplet(ABC):
                     radius=self.radius,
                     measured_radius=self.measured_radius(),
                     refractive_index=self.refractive_index,
+                    activity=self.surface_solvent_activity(),
                     vapour_pressure=self.vapour_pressure,
                     temperature=self.temperature,
                     drag_coefficient=self.drag_coefficient,

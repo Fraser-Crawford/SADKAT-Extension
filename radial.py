@@ -37,7 +37,7 @@ class RadialDroplet(Droplet):
 
     def extra_results(self):
         return dict(
-            layer_mass_solute=self.log_mass_solute[:],
+            layer_mass_solute=np.exp(self.log_mass_solute[:]),
             average_layer_concentrations=self.average_layer_concentration,
             layer_concentrations=self.linear_layer_concentrations(),
             layer_boundaries=self.cell_boundaries,
@@ -115,7 +115,7 @@ class RadialDroplet(Droplet):
         cell_boundaries = radius*np.arange(1,layers)/layers
         concentration = mass_solute/volume
         real_boundaries = np.concatenate(([0],cell_boundaries,[radius]))
-        log_mass_solute = np.log(4/3*np.pi*(real_boundaries[1:]**3-real_boundaries[:-1]**3))
+        log_mass_solute = np.log(4*concentration/3*np.pi*(real_boundaries[1:]**3-real_boundaries[:-1]**3))
         cell_velocities = np.zeros(len(cell_boundaries))
         return RadialDroplet(solution,environment,gravity,stationary,temperature,velocity,position,mass_solvent,cell_boundaries,cell_velocities,log_mass_solute)
 
@@ -219,12 +219,11 @@ class RadialDroplet(Droplet):
         normalised_boundaries = self.all_positions()/radius
         gradients = self.get_gradients(normalised_boundaries)
         diffusion = np.zeros(self.layers)
-        circulation = self.circulate
         for i in range(self.layers-1):
             value = 4*np.pi*radius*average_diffusion[i]*gradients[i]*normalised_boundaries[i+1]**2
             diffusion[i] += value
             diffusion[i+1] -= value
-        return (redistribute + diffusion + circulation)/self.layer_mass_solute
+        return (redistribute + diffusion)/self.layer_mass_solute
 
     def mass_solute(self):
         return np.sum(self.layer_mass_solute)

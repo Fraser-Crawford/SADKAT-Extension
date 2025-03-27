@@ -37,7 +37,7 @@ class Solution:
         if self.concentration_coefficients is None:
             mfs = np.linspace(0,1.0,100)
             concentrations = mfs*self.density(mfs)
-            self.concentration_coefficients = np.polyfit(concentrations, mfs, 4)
+            self.concentration_coefficients = np.polyfit(concentrations, mfs, 6)
         return np.poly1d(self.concentration_coefficients)(concentration)
 
     def concentration(self, mfs):
