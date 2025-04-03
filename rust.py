@@ -7,7 +7,6 @@ from scipy.integrate import solve_ivp
 from solution_definitions import aqueous_NaCl
 from suspension import silica
 
-
 @dataclass
 class RustDroplet:
     solution:str

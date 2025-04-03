@@ -1042,4 +1042,4 @@ def different_size_convection_experiment():
     plt.legend(handle, ["D = 30.5 nm", "D = 86.1 nm", "D = 121.5 nm"], loc="upper right")
     plt.show()
 if __name__ == '__main__':
-    diffusion_fitting_size()
+    test_air_flow_size()
