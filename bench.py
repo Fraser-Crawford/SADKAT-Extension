@@ -2,8 +2,11 @@ import time
 from cProfile import label
 from dataclasses import dataclass
 
+import scipy
+
 import suspension
 from environment import Atmosphere, thermal_conductivity_air
+from fit import lorentz_lorenz, correct_radius
 from radial import RadialDroplet
 from rust import RustDroplet, DataDroplet
 from solution_definitions import aqueous_NaCl
@@ -548,7 +551,8 @@ def locking_rust_temperature():
     exp_times = np.array([11.55, 5.58, 4.00, 2.89, 2.26, 1.31, 1.24, 1.04, 0.87])
     concentration = 0.6/100*2200
     print(concentration)
-    plt.scatter(Ts,exp_times, label="Experimental")
+    plt.scatter(Ts,exp_times, label="Experimental",marker="D",zorder=10)
+    results = []
     for RH in RHs:
         y = []
         input_rh = [RH]*N
@@ -561,10 +565,12 @@ def locking_rust_temperature():
             y += [trajectory.t_events[0][0]]
             print(f"{trajectory.t_events[0][0]:.2f} s modelled, {exp_time:.2f} s measured")
             print()
-        plt.plot(Ts,y,label=f"RH = {RH:.1f}")
+        results.append(y)
+    plt.fill_between(Ts,results[0],results[1],alpha=0.3,label="RH Uncertainty\nInterval")
     plt.legend()
     plt.xlabel("Temperature / K")
     plt.ylabel("Locking Point Time / s")
+    plt.yscale("log")
     plt.show()
 
 def locking_rust_rh():
@@ -596,57 +602,57 @@ def locking_rust_rh():
 ])
     concentration = 0.5 / 100 * 2200
     print(concentration)
-    plt.scatter(RHs, exp_times, label="Experimental")
+    plt.scatter(RHs, exp_times, label="Experimental",marker="D",zorder=10)
 
     RH_minus = RHs - 5
-    #RH_minus[RH_minus < 0] = 0
-    y = []
+    results = []
+    y1 = []
     for rh, R0, exp_time in zip(RH_minus, R0s, exp_times):
         print(T, rh, R0)
         droplet = RustDroplet("aqueous_NaCl", "silica", 100, T, rh/100, 0.03, 90e-9)
         trajectory = droplet.integrate(100.0, R0, 0.0, concentration,
                                        terminate_on_locking=True, locking_threshold=300.0e-9)
         print(trajectory.message)
-        y += [trajectory.t_events[0][0]]
+        y1 += [trajectory.t_events[0][0]]
         print(f"{trajectory.t_events[0][0]:.2f} s modelled, {exp_time:.2f} s measured")
         print()
-    x = np.arange(0,100,10)
-    plt.plot(x, y, label=f"RH - 5%")
-
+    results.append(y1)
     RH_plus = RHs + 5
-    y = []
+    y2 = []
     for rh, R0, exp_time in zip(RH_plus, R0s, exp_times):
         print(T, rh, R0)
         droplet = RustDroplet("aqueous_NaCl", "silica", 100, T, rh/100, 0.03, 90e-9)
         trajectory = droplet.integrate(100.0, R0, 0.0, concentration,
                                        terminate_on_locking=True, locking_threshold=300.0e-9)
         print(trajectory.message)
-        y += [trajectory.t_events[0][0]]
+        y2 += [trajectory.t_events[0][0]]
         print(f"{trajectory.t_events[0][0]:.2f} s modelled, {exp_time:.2f} s measured")
         print()
-    plt.plot(x, y, label=f"RH + 5%")
+    results.append(y2)
+    plt.fill_between(RHs,results[0],results[1],alpha=0.3,label="RH Uncertainty\nInterval")
     plt.legend()
     plt.xlabel("Relative Humidity / %")
     plt.ylabel("Locking Point Time / s")
-    #plt.yscale("log")
+    plt.yscale("log")
     plt.show()
 
 def test_particle_concentrations():
     concentration = 2.0 / 100 * 2200
     layers = 100
-    droplet = RustDroplet("aqueous_NaCl", "silica", layers, 293, 0.0, 1.0, 90e-9)
-    trajectory = droplet.integrate(40.0, 30e-6, 0.0, concentration,
-                                   terminate_on_locking=True, locking_threshold=300.0e-9)
-    df = droplet.complete_trajectory(trajectory)
-    print(trajectory.message)
-    print(np.max(df.time))
-    for boundaries,concentrations in zip(df.true_boundaries,df.layer_particle_concentrations):
-        plt.step(boundaries[:-1],concentrations)
-    plt.show()
+    for U in [0.0,0.05,0.10,0.15,0.20,0.25]:
+        droplet = RustDroplet("aqueous_NaCl", "silica", layers, 293, 0.0, U, 90e-9)
+        trajectory = droplet.integrate(40.0, 30e-6, 0.0, concentration,
+                                       terminate_on_locking=True, locking_threshold=300.0e-9)
+        df = droplet.complete_trajectory(trajectory)
+        print(trajectory.message)
+        print(np.max(df.time))
+        for boundaries,concentrations in zip(df.true_boundaries,df.layer_particle_concentrations):
+            plt.step(boundaries[:-1],concentrations)
+        plt.show()
 
-    for boundaries,concentrations in zip(df.true_boundaries,df.layer_concentrations):
-        plt.step(boundaries[:-1],concentrations)
-    plt.show()
+        for boundaries,concentrations in zip(df.true_boundaries,df.layer_concentrations):
+            plt.step(boundaries[:-1],concentrations)
+        plt.show()
 
 def test_solute_concentrations():
     layers=100
@@ -712,52 +718,158 @@ def test_air_flow_size():
 
 def convection_fitting():
     from glob import glob
+    bins = 30
+    threshold = 10000
     shell_thickness = 500e-9
     directory = fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\200 sccm\Droplets"
     files = glob(fr"{directory}\*.csv")
     results = [pd.read_csv(f"{file}") for file in files]
+    x = np.array([])
+    y = np.array([])
     for droplet in results:
-        plt.scatter(droplet.relative_time, droplet.radius*1e-6, s=3,c="blue",marker="x")
+        x = np.append(x,droplet.relative_time)
+        y = np.append(y,droplet.radius*1e-6)
+    x = x[~np.isnan(y)]
+    y = y[~np.isnan(y)]
+    data, x_e, y_e = np.histogram2d(x,y,bins=bins,density=True,range=np.array([[np.min(x),np.max(x)],[np.min(y),np.max(y)]]))
+    z = scipy.interpolate.interpn((0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])), data, np.vstack([x, y]).T, method="splinef2d",bounds_error=False)
+    z[np.where(np.isnan(z))] = 0.0
+    idx = z.argsort()
+    x, y, z = x[idx], y[idx], z[idx]
+    min = np.min(z[z > threshold])
+    max = np.max(z[z > threshold])*2
+    plt.scatter(x[z > threshold], y[z > threshold], s=25, c="blue", alpha=(z[z > threshold] - min) / max,edgecolors="none")
+
     directory = fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\100 sccm\Droplets"
     files = glob(fr"{directory}\*.csv")
     results = [pd.read_csv(f"{file}") for file in files]
+    x = np.array([])
+    y = np.array([])
     for droplet in results:
-        plt.scatter(droplet.relative_time, droplet.radius * 1e-6, s=2, c="red")
-
+        x = np.append(x, droplet.relative_time)
+        y = np.append(y, droplet.radius * 1e-6)
+    data, x_e, y_e = np.histogram2d(x, y, bins=bins, density=True, range=np.array([[np.min(x), np.max(x)], [np.min(y), np.max(y)]]))
+    z = scipy.interpolate.interpn((0.5 * (x_e[1:] + x_e[:-1]), 0.5 * (y_e[1:] + y_e[:-1])), data, np.vstack([x, y]).T,
+                                  method="splinef2d", bounds_error=False)
+    z[np.where(np.isnan(z))] = 0.0
+    idx = z.argsort()
+    x, y, z = x[idx], y[idx], z[idx]
+    min = np.min(z[z>threshold])
+    max = np.max(z[z>threshold])*2
+    plt.scatter(x[z>threshold], y[z>threshold], s=25, c="orange", alpha=(z[z>threshold]-min)/max,edgecolors="none")
     Us = [0.0,0.5]
     cs = ["red","black"]
+    R0s = [24e-6,24e-6]
     concentration = 2.0 / 100 * 2200
     max_times = []
     min_radii = []
-    for U,c in zip(Us,cs):
+    for U,c,R0 in zip(Us,cs,R0s):
         print(U)
 
-        droplet = RustDroplet("aqueous_NaCl", "silica", 100, 273.15+17.66, 0.46, U, 65e-9)
-        trajectory = droplet.integrate(40.0, 24e-6, 0.0, concentration,
+        droplet = RustDroplet("aqueous_NaCl", "silica", 50, 273.15+17.66, 0.46, U, 65e-9)
+        trajectory = droplet.integrate(40.0, R0, 0.0, concentration,
                                        terminate_on_locking=True, locking_threshold=shell_thickness)
 
         print(trajectory.message)
         df = droplet.complete_trajectory(trajectory)
-        plt.plot(df.time,df.radius,label=f"{U:.1f} m/s",c=c,linewidth=3,alpha=0.5)
+        n = np.array([lorentz_lorenz(1-phi,phi,1.335,1.473) for phi in df.particle_volume_fraction])
+        new_radii = correct_radius(df.radius,n,1.335)
+        plt.plot(df.time,new_radii,label=f"{U:.1f} m/s",c=c,linewidth=3,alpha=0.5)
         max_times.append(np.max(df.time))
-        min_radii.append(np.min(df.radius))
+        min_radii.append(np.min(new_radii))
     plt.scatter(max_times, min_radii, marker="o", s=200, c="black", zorder=9)
     plt.scatter(max_times,min_radii,marker="o",s=100,c="orange",zorder=10)
     plt.xlabel("Time / s")
     plt.ylabel("Droplet Radius / m")
     plt.title(f"Convectional Mixing at 45% RH, 17.7 C \n Shell thickness = {shell_thickness*1e9:.0f} nm")
     plt.xlim(0,4.0)
-    plt.ylim(0,30e-6)
+    plt.ylim(5e-6,25e-6)
     plt.legend()
     plt.show()
 
-def diffusion_fitting():
+def interval_convection_fitting():
+    from glob import glob
+    shell_thickness = 500e-9
+    directory = fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\200 sccm\Droplets"
+    files = glob(fr"{directory}\*.csv")
+    results = [pd.read_csv(f"{file}") for file in files]
+    times_array = [droplet.relative_time for droplet in results]
+    length_array = np.array([len(times) for times in times_array])
+    longest_times = max(times_array, key=len)
+    longest = np.max(length_array)
+    radii = np.zeros(longest)
+    normalisation_factors = np.array([np.count_nonzero(length_array >= i) for i in range(1, longest + 1)])
+    for droplet in results:
+        radii[:len(droplet.relative_time)] += droplet.radius*1e-6
+    mean_radii = radii / normalisation_factors
+    variances = np.zeros(len(mean_radii))
+    for droplet in results:
+        variances[:len(droplet.radius)] += (droplet.radius*1e-6 - mean_radii[:len(droplet.radius)])**2
+    variances /= normalisation_factors
+    standard_deviations = np.sqrt(variances)
+    x = longest_times
+    plt.fill_between(x, mean_radii - standard_deviations, mean_radii + standard_deviations,
+                     alpha=0.3)
+    plt.plot(x, mean_radii, linewidth=4)
+
+    directory = fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\100 sccm\Droplets"
+    files = glob(fr"{directory}\*.csv")
+    results = [pd.read_csv(f"{file}") for file in files]
+    times_array = [droplet.relative_time for droplet in results]
+    length_array = np.array([len(times) for times in times_array])
+    longest_times = max(times_array, key=len)
+    longest = np.max(length_array)
+    radii = np.zeros(longest)
+    normalisation_factors = np.array([np.count_nonzero(length_array >= i) for i in range(1, longest + 1)])
+    for droplet in results:
+        radii[:len(droplet.relative_time)] += droplet.radius[~np.isnan(droplet.radius)]*1e-6
+    mean_radii = radii / normalisation_factors
+    variances = np.zeros(len(mean_radii))
+    for droplet in results:
+        variances[:len(droplet.radius)] += (droplet.radius*1e-6 - mean_radii[:len(droplet.radius)])**2
+    variances /= normalisation_factors
+    standard_deviations = np.sqrt(variances)
+    x = longest_times
+    plt.fill_between(x, mean_radii - standard_deviations, mean_radii + standard_deviations,
+                     alpha=0.3)
+    plt.plot(x, mean_radii, linewidth=4)
+
+    Us = [0.0,0.5]
+    cs = ["red","black"]
+    R0s = [24e-6,24e-6]
+    concentration = 2.0 / 100 * 2200
+    max_times = []
+    min_radii = []
+    for U,c,R0 in zip(Us,cs,R0s):
+        print(U)
+
+        droplet = RustDroplet("aqueous_NaCl", "silica", 50, 273.15+17.66, 0.46, U, 65e-9)
+        trajectory = droplet.integrate(40.0, R0, 0.0, concentration,
+                                       terminate_on_locking=True, locking_threshold=shell_thickness)
+
+        print(trajectory.message)
+        df = droplet.complete_trajectory(trajectory)
+        n = np.array([lorentz_lorenz(1-phi,phi,1.335,1.473) for phi in df.particle_volume_fraction])
+        new_radii = correct_radius(df.radius,n,1.335)
+        plt.plot(df.time,new_radii,label=f"{U:.1f} m/s",c=c,linewidth=3,alpha=1.0,linestyle=":")
+        max_times.append(np.max(df.time))
+        min_radii.append(np.min(new_radii))
+    plt.scatter(max_times, min_radii, marker="D", s=200, c="black", zorder=9)
+    plt.scatter(max_times,min_radii,marker="D",s=100,c="orange",zorder=10)
+    plt.xlabel("Time / s")
+    plt.ylabel("Droplet Radius / m")
+    #plt.title(f"Convectional Mixing at 45% RH, 17.7 C \n Shell thickness = {shell_thickness*1e9:.0f} nm")
+    plt.xlim(0,4.0)
+    plt.ylim(5e-6,25e-6)
+    plt.legend()
+    plt.show()
+
+def diffusion_fitting_air_flow():
     layers = 50
-    r0 = 15e-6
-    Us = np.linspace(0.1,2,20)
-    R = np.linspace(0,1.0,layers)
+    r0 = 30e-6
+    Us = np.linspace(0.05,2,40)
     Ds = []
-    for U in Us:
+    for U in Us[1:]:
         print(U)
         droplet = RustDroplet("aqueous_NaCl", "silica", layers, 273.15 + 20, 0.5, U, 500e-9)
         trajectory = droplet.integrate(40.0, r0, 0.0, 2.0 / 100 * 2200,
@@ -767,25 +879,65 @@ def diffusion_fitting():
         mask = df.time > 0.5
         coeff = np.polyfit(np.array(df.time[mask],dtype=float),np.array((df.radius[mask]*2)**2,dtype=float),1)
         kappa = -coeff[0]
-
         for index,time in enumerate(df.time):
-            if time > 1.0:
+            if time > 2.0:
                 concentration_profile = df.layer_particle_concentrations[index]
                 break
-        coeff = np.polyfit(R[:int(0.8*layers)]**2,np.log(concentration_profile[:int(0.8*layers)]),1)
-        Pe = coeff[0]*2
+        Pe = np.log(concentration_profile[:int(0.8*layers)][-1]/concentration_profile[0])*2/0.8**2
+        print(Pe)
         D = kappa/(8*Pe) - 1.38e-23*293.15/(6*np.pi*1e-3*500e-9)
         Ds.append(D)
-    plt.scatter(Us,Ds,label="Extracted")
-    plt.plot(Us,2/9*r0*Us/(2*np.pi**2*np.log(2)*(2+np.pi)*(1+1000/18.13)),linestyle="--",label="A=2/9")
-    plt.plot(Us, 1 / 9 * r0 * Us / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
+    plt.plot(Us[1:],2/9*r0*Us[1:]/(2*np.pi**2*np.log(2)*(2+np.pi)*(1+1000/18.13)),linestyle="--",label="A=2/9",linewidth=3)
+    plt.plot(Us[1:], 1 / 9 * r0 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",linewidth=3,
              label="A=1/9")
-    plt.plot(Us, 2/27 * r0 * Us / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
+    plt.plot(Us[1:], 2/27 * r0 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",linewidth=3,
              label="A=2/27")
-    plt.plot(Us, 1 / 27 * r0 * Us / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
-             label="A=1/27")
+    plt.plot(Us[1:], 1 / 27 * r0 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
+             label="A=1/27",linewidth=3)
+    plt.scatter(Us[1:], Ds, marker="D", label="Extracted",zorder=10)
     plt.legend()
     plt.xlabel("Air Flow Speed / m s-1")
+    plt.ylabel("Diffusion Coefficient / m2 s-1")
+    plt.show()
+
+def diffusion_fitting_size():
+    layers = 50
+    r0s = np.linspace(10e-6,30e-6,20)
+    U = 0.5
+    Ds = []
+    for r0 in r0s:
+        print(r0)
+        droplet = RustDroplet("aqueous_NaCl", "silica", layers, 273.15 + 20, 0.5, U, 500e-9)
+        trajectory = droplet.integrate(40.0, r0, 0.0, 2.0 / 100 * 2200,
+                                       terminate_on_locking=True, locking_threshold=300e-9)
+        print(trajectory.message)
+        df = droplet.complete_trajectory(trajectory)
+        mask = df.time > 0.5
+        coeff = np.polyfit(np.array(df.time[mask], dtype=float), np.array((df.radius[mask] * 2) ** 2, dtype=float), 1)
+        kappa = -coeff[0]
+        threshold = 0.5*np.max(df.time)
+        for index, time in enumerate(df.time):
+            if time > threshold:
+                concentration_profile = df.layer_particle_concentrations[index]
+                break
+        Pe = np.log(concentration_profile[:int(0.8 * layers)][-1] / concentration_profile[0]) * 2 / 0.8 ** 2
+        print(Pe)
+        D = kappa / (8 * Pe) - 1.38e-23 * 293.15 / (6 * np.pi * 1e-3 * 500e-9)
+        Ds.append(D)
+    plt.plot(r0s, 2 / 9 * r0s * U / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)),
+             linestyle="--", label="A=2/9", linewidth=3)
+    plt.plot(r0s, 1 / 9 * r0s * U / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)),
+             linestyle="--", linewidth=3,
+             label="A=1/9")
+    plt.plot(r0s, 2 / 27 * r0s * U / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)),
+             linestyle="--", linewidth=3,
+             label="A=2/27")
+    plt.plot(r0s, 1 / 27 * r0s * U / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)),
+             linestyle="--",
+             label="A=1/27", linewidth=3)
+    plt.scatter(r0s, Ds, marker="D", label="Extracted", zorder=10)
+    plt.legend()
+    plt.xlabel("Initial Droplet Radius / m")
     plt.ylabel("Diffusion Coefficient / m2 s-1")
     plt.show()
 
@@ -795,7 +947,7 @@ def different_sizes_convection():
     volumes = []
     for rp in rps:
         print(rp)
-        droplet = RustDroplet("aqueous_NaCl", "silica", 50, 273.15 + 20, 0.46, 0.5, rp)
+        droplet = RustDroplet("aqueous_NaCl", "silica", 50, 273.15 + 20, 0.46, 0.0, rp)
         trajectory = droplet.integrate(40.0, 23e-6, 0.0, 1.0 / 100 * 2200,
                                        terminate_on_locking=True, locking_threshold=400e-9)
         print(trajectory.message)
@@ -806,15 +958,88 @@ def different_sizes_convection():
     plt.xlabel("Nanoparticle Radius / m")
     plt.ylabel("Fraction of Volume Remaining")
     plt.xscale("log")
-    plt.title("How Nanoparticle Radius Affects Locking Point at 0.5 m/s Airflow")
+    plt.title("How Nanoparticle Radius Affects Locking Point at 0.0 m/s Airflow")
     plt.show()
 
-def test():
-    droplet = UniformDroplet.from_mfs(aqueous_NaCl,Atmosphere(293,0.95),np.array([0,0,-9.81]),30e-6,0.0001,293,np.array([1,0,0]),stationary=False)
-    trajectory = droplet.integrate(100,terminate_on_equilibration=True)
-    state = droplet.complete_trajectory(trajectory)
-    plt.plot(state.time,state.radius)
-    plt.show()
+def different_size_convection_experiment():
+    colours = ["blue", "orange", "green"]
+    fast_directories = [
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\Sample A 200 sccm",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\Sample C 200 sccm",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\Sample D 200 sccm"]
+    slow_directories = [
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\Sample A 100 sccm",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\Sample C 100 sccm",
+        fr"C:\Users\lh19417\OneDrive - University of Bristol\PHD\Documents\Papers\Solid particle suspensions\CONVECTION DATA\Sample D 100 sccm"]
+    handle = []
+    for directory, colour in zip(slow_directories, colours):
+        files = glob(fr"{directory}\TrimmedDroplets\*.csv")
+        results = [pd.read_csv(f"{file}") for file in files]
+        starting_radii = np.array([droplet.radius[0] for droplet in results])
+        times_array = [droplet.relative_time for droplet in results]
+        length_array = np.array([len(times) for times in times_array])
+        longest_times = max(times_array, key=len)
+        final_time = np.median([times.values[-1] for times in times_array])
+        longest = np.max(length_array)
+        volume_fractions = np.zeros(longest)
+        normalisation_factors = np.array([np.count_nonzero(length_array >= i) for i in range(1, longest + 1)])
+        for droplet, starting_radius in zip(results, starting_radii):
+            volume_fractions[:len(droplet.relative_time)] += droplet.radius ** 3 / starting_radius ** 3
+        mean_volume_fractions = volume_fractions / normalisation_factors
+        variances = np.zeros(len(mean_volume_fractions))
+        for droplet, starting_radius in zip(results, starting_radii):
+            variances[:len(droplet.radius)] += (droplet.radius ** 3 / starting_radius ** 3 - mean_volume_fractions[
+                                                                                             :len(droplet.radius)]) ** 2
+        variances /= normalisation_factors
+        standard_deviations = np.sqrt(variances)
+        x = longest_times / final_time
+        plt.fill_between(x, mean_volume_fractions - standard_deviations, mean_volume_fractions + standard_deviations,
+                         alpha=0.3)
+        plt.plot(x, mean_volume_fractions, linewidth=4)
+        handle.append(plt.scatter(0, 0, s=4, c=colour))
 
+    plt.ylim(0, 0.2)
+    plt.xlim(0.8, 1)
+    plt.hlines(0.02, 0.8, 1.05, linestyles="--")
+    plt.xlabel(fr"Time since Release / Median Lifetime")
+    plt.ylabel("Fraction of Volume Remaining")
+    plt.title("100 sccm Airflow")
+    plt.legend(handle, ["D = 30.5 nm", "D = 86.1 nm", "D = 121.5 nm"], loc="upper right")
+    plt.show()
+    handle = []
+    for directory, colour in zip(fast_directories, colours):
+        files = glob(fr"{directory}\TrimmedDroplets\*.csv")
+        results = [pd.read_csv(f"{file}") for file in files]
+        starting_radii = np.array([droplet.radius[0] for droplet in results])
+        times_array = [droplet.relative_time for droplet in results]
+        length_array = np.array([len(times) for times in times_array])
+        longest_times = max(times_array, key=len)
+        final_time = np.median([times.values[-1] for times in times_array])
+        longest = np.max(length_array)
+        volume_fractions = np.zeros(longest)
+        normalisation_factors = np.array([np.count_nonzero(length_array >= i) for i in range(1, longest + 1)])
+        for droplet, starting_radius in zip(results, starting_radii):
+            volume_fractions[:len(droplet.relative_time)] += droplet.radius ** 3 / starting_radius ** 3
+        mean_volume_fractions = volume_fractions / normalisation_factors
+        variances = np.zeros(len(mean_volume_fractions))
+        for droplet, starting_radius in zip(results, starting_radii):
+            variances[:len(droplet.radius)] += (droplet.radius ** 3 / starting_radius ** 3 - mean_volume_fractions[
+                                                                                             :len(droplet.radius)]) ** 2
+        variances /= normalisation_factors
+        standard_deviations = np.sqrt(variances)
+        x = longest_times / final_time
+        plt.fill_between(x, mean_volume_fractions - standard_deviations, mean_volume_fractions + standard_deviations,
+                         alpha=0.3)
+        plt.plot(x, mean_volume_fractions, linewidth=4)
+        handle.append(plt.scatter(0, 0, s=4, c=colour))
+
+    plt.ylim(0, 0.2)
+    plt.xlim(0.8, 1)
+    plt.hlines(0.02, 0.8, 1.05, linestyles="--")
+    plt.xlabel(fr"Time since Release / Median Lifetime")
+    plt.ylabel("Fraction of Volume Remaining")
+    plt.title("200 sccm Airflow")
+    plt.legend(handle, ["D = 30.5 nm", "D = 86.1 nm", "D = 121.5 nm"], loc="upper right")
+    plt.show()
 if __name__ == '__main__':
-    test()
+    diffusion_fitting_size()

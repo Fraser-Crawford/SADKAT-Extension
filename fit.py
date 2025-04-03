@@ -174,3 +174,7 @@ def correction_factor(RI):
 
 def correct_radius(radius, previous_RI, new_RI):
     return radius / correction_factor(previous_RI) * correction_factor(new_RI)
+
+def lorentz_lorenz(solvent_volume_fraction,solute_volume_fraction,solvent_refractive_index,solute_refractive_index):
+    equation = lambda x: (x**2-1)/(x**2+2)-solvent_volume_fraction*(solvent_refractive_index**2-1)/(solvent_refractive_index**2+2)-solute_volume_fraction*(solute_refractive_index**2-1)/(solute_refractive_index**2+2)
+    return scipy.optimize.fsolve(equation,solvent_refractive_index)[0]

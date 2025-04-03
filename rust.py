@@ -4,8 +4,6 @@ import numpy as np
 import pandas as pd
 from rust_SADKAT import get_initial_state, y_prime, efflorescence,locking
 from scipy.integrate import solve_ivp
-
-from radial import RadialDroplet
 from solution_definitions import aqueous_NaCl
 from suspension import silica
 
@@ -83,7 +81,7 @@ class RustDroplet:
         labels = ["radius","surface_temperature","solvent_mass","density",
                   "mfs","activity","layer_positions","layer_concentrations",
                   "wet_layer_volumes","layer_mass_solute","true_boundaries",
-                  "layer_particle_concentrations"]
+                  "layer_particle_concentrations","particle_volume_fraction"]
         variables = {key: np.empty(trajectory.t.size, dtype=object) for key in labels}
         for i, state in enumerate(trajectory.y.T):
             earlier_droplet = DataDroplet(state, self.solution,self.suspension,self.particle_radius,self.layers)
@@ -118,9 +116,10 @@ class DataDroplet:
         self.wet_layer_volumes =  self.layer_volumes - self.layer_particle_mass/self.suspension.particle_density
         self.layer_concentrations = self.layer_solute_mass/self.layer_volumes
         self.activity = self.solution.activity(self.mfs)
+        self.particle_volume_fraction = self.particle_mass/(self.volume*self.suspension.particle_density)
     def complete_state(self):
         return dict(radius=self.radius,surface_temperature=self.temperatures[-1],
                     solvent_mass=self.solvent_mass,density=self.density,mfs=self.mfs,activity=self.activity,
                     layer_positions=self.layer_positions,layer_concentrations=self.layer_concentrations,
                     wet_layer_volumes=self.wet_layer_volumes,layer_mass_solute=self.layer_solute_mass,
-                    true_boundaries=self.true_boundaries,layer_particle_concentrations=self.layer_particle_concentration)
+                    true_boundaries=self.true_boundaries,layer_particle_concentrations=self.layer_particle_concentration,particle_volume_fraction=self.particle_volume_fraction)
