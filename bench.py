@@ -675,11 +675,6 @@ def test_solute_concentrations():
         plt.plot(df.time,[concentrations[i] for concentrations in df.layer_concentrations])
     plt.show()
 
-    for i in range(0,layers-1):
-        plt.plot(df.time,[concentrations[i] for concentrations in df.layer_particle_concentrations],label=i)
-    plt.legend()
-    plt.show()
-
 def test_air_flow_time():
     Us = np.linspace(0.0,30.0,31)
     concentration = 0.6 / 100 * 2200
@@ -866,7 +861,7 @@ def interval_convection_fitting():
 
 def diffusion_fitting_air_flow():
     layers = 50
-    r0 = 30e-6
+    r0 = 25e-6
     Us = np.linspace(0.05,2,40)
     Ds = []
     for U in Us[1:]:
@@ -879,20 +874,20 @@ def diffusion_fitting_air_flow():
         mask = df.time > 0.5
         coeff = np.polyfit(np.array(df.time[mask],dtype=float),np.array((df.radius[mask]*2)**2,dtype=float),1)
         kappa = -coeff[0]
-        for index,time in enumerate(df.time):
-            if time > 2.0:
+        for index,radius in enumerate(df.radius):
+            if radius < 2e-5:
                 concentration_profile = df.layer_particle_concentrations[index]
                 break
         Pe = np.log(concentration_profile[:int(0.8*layers)][-1]/concentration_profile[0])*2/0.8**2
         print(Pe)
         D = kappa/(8*Pe) - 1.38e-23*293.15/(6*np.pi*1e-3*500e-9)
         Ds.append(D)
-    plt.plot(Us[1:],2/9*r0*Us[1:]/(2*np.pi**2*np.log(2)*(2+np.pi)*(1+1000/18.13)),linestyle="--",label="A=2/9",linewidth=3)
-    plt.plot(Us[1:], 1 / 9 * r0 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",linewidth=3,
+    plt.plot(Us[1:],2/9*2e-5*Us[1:]/(2*np.pi**2*np.log(2)*(2+np.pi)*(1+1000/18.13)),linestyle="--",label="A=2/9",linewidth=3)
+    plt.plot(Us[1:], 1 / 9 * 2e-5 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",linewidth=3,
              label="A=1/9")
-    plt.plot(Us[1:], 2/27 * r0 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",linewidth=3,
+    plt.plot(Us[1:], 2/27 * 2e-5 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",linewidth=3,
              label="A=2/27")
-    plt.plot(Us[1:], 1 / 27 * r0 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
+    plt.plot(Us[1:], 1 / 27 * 2e-5 * Us[1:] / (2 * np.pi ** 2 * np.log(2) * (2 + np.pi) * (1 + 1000 / 18.13)), linestyle="--",
              label="A=1/27",linewidth=3)
     plt.scatter(Us[1:], Ds, marker="D", label="Extracted",zorder=10)
     plt.legend()
@@ -1042,4 +1037,4 @@ def different_size_convection_experiment():
     plt.legend(handle, ["D = 30.5 nm", "D = 86.1 nm", "D = 121.5 nm"], loc="upper right")
     plt.show()
 if __name__ == '__main__':
-    test_air_flow_size()
+    diffusion_fitting_air_flow()
